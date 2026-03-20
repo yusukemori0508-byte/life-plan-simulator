@@ -88,15 +88,20 @@ export const runScenario = (form, scenarioKey) => {
   }
 
   // ── 年金概算（事前に計算） ──────────────────
+  // 年金は額面（グロス）収入で計算するのが正しい。
+  // selfIncome は手取りベース（profileToSimForm で変換済み）なので
+  // グロス値として selfIncomeGross / spouseIncomeGross を優先使用する。
   const selfPension = estimatePension({
-    annualIncome: safeNum(f.selfIncome, 0),
+    annualIncome: safeNum(f.selfIncomeGross ?? f.selfIncome, 0),
     currentAge: startAge,
     retirementAge: retireAge,
     isSelfEmployed: isSelf,
   });
   const spousePension = hasSpouse
     ? estimateSpousePension({
-        spouseIncome: spouseWorking ? safeNum(f.spouseIncome, 0) : spouseRTWInc,
+        spouseIncome: spouseWorking
+          ? safeNum(f.spouseIncomeGross ?? f.spouseIncome, 0)
+          : spouseRTWInc,
         spouseAge: spouseAge0,
         retirementAge: retireAge,
         spouseIsWorking: spouseWorking || spouseRTWInc > 0,
@@ -171,9 +176,10 @@ export const runScenario = (form, scenarioKey) => {
     }
 
     // 年金収入（65歳以降）
+    // f.excludePension === true の場合は年金を0として扱う（年金なし比較用）
     let pensionSelf   = 0;
     let pensionSpouse = 0;
-    if (age >= PENSION.receiveStartAge) {
+    if (age >= PENSION.receiveStartAge && !f.excludePension) {
       pensionSelf   = selfPension.annual;
       pensionSpouse = hasSpouse ? spousePension.annual : 0;
     }

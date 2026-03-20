@@ -342,15 +342,22 @@ const TableView = ({ rows, eventsByAge, retireAge, minAssetAge }) => {
 };
 
 // ── メインコンポーネント ───────────────────────────────────────
-export const FinanceChart = ({ rows, profile, minAssetInfo }) => {
-  const [tab, setTab] = React.useState('assets');
+export const FinanceChart = ({ rows, rowsNoPension, profile, minAssetInfo, pensionInfo }) => {
+  const [tab, setTab]               = React.useState('assets');
+  const [showPension, setShowPension] = React.useState(true);
 
   if (!rows || rows.length === 0) return null;
 
-  const ageMin    = rows[0].age;
-  const ageMax    = rows[rows.length - 1].age;
-  const retireAge = profile?.retirementAge ?? 65;
-  const minAssetAge = minAssetInfo?.age ?? null;
+  // 表示するrows（年金あり/なし切替）
+  const displayRows = (tab === 'assets' && !showPension && rowsNoPension)
+    ? rowsNoPension
+    : rows;
+
+  const ageMin      = rows[0].age;
+  const ageMax      = rows[rows.length - 1].age;
+  const retireAge   = profile?.retirementAge ?? 65;
+  const pensionAge  = pensionInfo?.startAge  ?? 65;
+  const minAssetAge = showPension ? (minAssetInfo?.age ?? null) : null;
 
   const events = React.useMemo(() => buildEvents(profile), [profile]);
   const eventsByAge = React.useMemo(() => {
@@ -360,11 +367,19 @@ export const FinanceChart = ({ rows, profile, minAssetInfo }) => {
   }, [events]);
 
   const getData = (t) => {
-    if (t === 'assets')  return rows.map(r => ({ age: r.age, value: r.totalAssets  }));
+    if (t === 'assets')  return displayRows.map(r => ({ age: r.age, value: r.totalAssets  }));
     if (t === 'income')  return rows.map(r => ({ age: r.age, value: r.totalIncome  }));
     if (t === 'expense') return rows.map(r => ({ age: r.age, value: r.totalExpense }));
     return null;
   };
+
+  // 年金による退職後資産差分（最終年）
+  const pensionImpact = React.useMemo(() => {
+    if (!rowsNoPension || !rows || rows.length === 0) return null;
+    const lastWith    = rows[rows.length - 1]?.totalAssets ?? 0;
+    const lastWithout = rowsNoPension[rowsNoPension.length - 1]?.totalAssets ?? 0;
+    return Math.round(lastWith - lastWithout);
+  }, [rows, rowsNoPension]);
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif' }}>
@@ -398,13 +413,13 @@ export const FinanceChart = ({ rows, profile, minAssetInfo }) => {
             events={events}
           />
 
-          {/* 凡例（3種のみ: 退職・最低資産・住宅購入） */}
+          {/* 凡例 */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '4px 8px 6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#6b7280' }}>
               <div style={{ width: 14, height: 2, background: '#2563eb', borderRadius: 1, opacity: 0.5 }} />
               退職
             </div>
-            {tab === 'assets' && minAssetAge != null && (
+            {tab === 'assets' && showPension && minAssetAge != null && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#6b7280' }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', border: '1.5px solid white', boxShadow: '0 0 0 1px #f59e0b' }} />
                 最低資産
@@ -417,6 +432,57 @@ export const FinanceChart = ({ rows, profile, minAssetInfo }) => {
               </div>
             )}
           </div>
+
+          {/* 年金 あり/なし トグル（資産タブのみ表示） */}
+          {tab === 'assets' && rowsNoPension && pensionInfo && (
+            <div style={{
+              margin: '0 8px 8px',
+              padding: '8px 12px',
+              background: showPension ? '#f0fdf4' : '#f8fafc',
+              borderRadius: 10,
+              border: `1px solid ${showPension ? '#bbf7d0' : '#e5e7eb'}`,
+              transition: 'all 0.2s',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: showPension ? '#15803d' : '#6b7280' }}>
+                    {showPension ? '✅ 年金収入を含む試算' : '⬜ 年金収入を除いた試算'}
+                  </div>
+                  {showPension && pensionInfo.totalMonthly > 0 && (
+                    <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1 }}>
+                      推定 約{pensionInfo.totalMonthly}万円/月
+                      {pensionInfo.spouseAnnual > 0 && `（本人+配偶者）`}
+                      · {pensionAge}歳〜
+                    </div>
+                  )}
+                  {!showPension && pensionImpact !== null && pensionImpact > 0 && (
+                    <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1 }}>
+                      年金あり比較で約+{pensionImpact.toLocaleString()}万の差
+                    </div>
+                  )}
+                </div>
+                {/* トグルスイッチ */}
+                <button
+                  onClick={() => setShowPension(p => !p)}
+                  style={{
+                    width: 40, height: 22, borderRadius: 999, border: 'none',
+                    background: showPension ? '#16a34a' : '#d1d5db',
+                    cursor: 'pointer', position: 'relative', flexShrink: 0,
+                    transition: 'background 0.2s',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: 3,
+                    left: showPension ? 21 : 3,
+                    width: 16, height: 16, borderRadius: '50%',
+                    background: '#fff',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    transition: 'left 0.2s',
+                  }} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <TableView

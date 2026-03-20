@@ -397,6 +397,69 @@ export const ResultScreen = ({ onBack, onRestart }) => {
         </Card>
 
         {/* ────────────────────────────────────────────────────── */}
+        {/* 年金サマリーカード                                     */}
+        {/* ────────────────────────────────────────────────────── */}
+        {result.pensionInfo && result.pensionInfo.totalMonthly > 0 && (
+          <Card className="rs-card" style={{ animationDelay: '0.28s' }}>
+            <CardLabel>公的年金（試算に含まれています）</CardLabel>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+              {/* 本人 */}
+              <div style={{
+                flex: 1, padding: '10px 12px', borderRadius: 12,
+                background: '#f0fdf4', border: '1px solid #bbf7d0',
+              }}>
+                <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 2, fontWeight: 600 }}>本人の推定年金</div>
+                <div style={{ fontSize: 16, fontWeight: 900, color: '#15803d' }}>
+                  約{Math.round(result.pensionInfo.selfAnnual / 12 * 10) / 10}
+                  <span style={{ fontSize: 10, fontWeight: 500, color: '#6b7280' }}>万/月</span>
+                </div>
+                <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}>
+                  年{result.pensionInfo.selfAnnual}万円
+                </div>
+              </div>
+              {/* 配偶者（いる場合のみ） */}
+              {result.pensionInfo.spouseAnnual > 0 ? (
+                <div style={{
+                  flex: 1, padding: '10px 12px', borderRadius: 12,
+                  background: '#f0fdf4', border: '1px solid #bbf7d0',
+                }}>
+                  <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 2, fontWeight: 600 }}>配偶者の推定年金</div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: '#15803d' }}>
+                    約{Math.round(result.pensionInfo.spouseAnnual / 12 * 10) / 10}
+                    <span style={{ fontSize: 10, fontWeight: 500, color: '#6b7280' }}>万/月</span>
+                  </div>
+                  <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}>
+                    年{result.pensionInfo.spouseAnnual}万円
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  flex: 1, padding: '10px 12px', borderRadius: 12,
+                  background: '#f8fafc', border: '1px solid #e5e7eb',
+                }}>
+                  <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 2, fontWeight: 600 }}>世帯合計</div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: '#15803d' }}>
+                    約{result.pensionInfo.totalMonthly}
+                    <span style={{ fontSize: 10, fontWeight: 500, color: '#6b7280' }}>万/月</span>
+                  </div>
+                  <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}>
+                    {result.pensionInfo.startAge}歳〜
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{
+              fontSize: 10, color: '#6b7280', lineHeight: 1.7,
+              padding: '8px 10px', background: '#fffbeb',
+              borderRadius: 8, border: '1px solid #fde68a',
+            }}>
+              ⚠️ 年金は概算です。実際の受給額はねんきんネット・ねんきん定期便でご確認ください。
+              月の生活費（{profileData.monthlyExpense ?? 20}万円）との差分が老後の毎年の取崩し額の目安になります。
+            </div>
+          </Card>
+        )}
+
+        {/* ────────────────────────────────────────────────────── */}
         {/* カード 3: 最低資産年齢 / 最低資産額                   */}
         {/* ────────────────────────────────────────────────────── */}
         <Card className="rs-card" style={{ animationDelay: '0.3s' }}>
@@ -773,11 +836,24 @@ export const ResultScreen = ({ onBack, onRestart }) => {
         {/* 家計推移グラフ                                         */}
         {/* ────────────────────────────────────────────────────── */}
         <Card className="rs-card" style={{ animationDelay: '0.45s' }}>
-          <CardLabel>家計推移</CardLabel>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <CardLabel style={{ marginBottom: 0 }}>家計推移</CardLabel>
+            {result.pensionInfo && result.pensionInfo.totalMonthly > 0 && (
+              <div style={{
+                fontSize: 10, fontWeight: 700, color: '#15803d',
+                background: '#dcfce7', padding: '3px 8px', borderRadius: 999,
+                letterSpacing: '0.03em',
+              }}>
+                年金込み試算
+              </div>
+            )}
+          </div>
           <FinanceChart
             rows={result.rows}
+            rowsNoPension={result.rowsNoPension}
             profile={profileData}
             minAssetInfo={result.minAsset}
+            pensionInfo={result.pensionInfo}
           />
         </Card>
 

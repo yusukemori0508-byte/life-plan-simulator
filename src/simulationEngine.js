@@ -13,7 +13,7 @@
 //     ⑤ 総合評価サマリー生成
 
 import { runScenario, calcSummaryStats } from './simulation.js';
-import { safeNum } from './utils.js';
+import { safeNum, estimatePension, estimateSpousePension } from './utils.js';
 import { calcInitialGauge, calcNetRatio, MONTHLY_BUFFER } from './gaugeCalc.js';
 
 // ─────────────────────────────────────────────────────────────
@@ -287,6 +287,9 @@ export const profileToSimForm = (profile, selectedChoices = []) => {
 
     // ── 収入（手取りベース） ───────────────────────────────
     selfIncome:        selfIncomeNet,
+    // ── 年金計算用グロス収入（厚生年金は額面で計算するため） ──
+    selfIncomeGross:   safeNum(p.selfIncome, 0),       // 額面年収（万円/年）
+    spouseIncomeGross: spouseIncGross,                  // 配偶者額面年収（万円/年）
     isSelfEmployed:    false,
     incomeGrowthRate:  safeNum(p.incomeGrowthRate, 1.5),
     idecoMonthly:      0,
@@ -737,17 +740,43 @@ export const runFullSimulation = (profileData, selectedChoices = []) => {
 
   const safetySummary = { ...safetySummaryBase, explanationReasons };
 
+  // 9. 年金情報（グロス収入ベースで計算・ResultScreen 表示用）
+  const selfPensionInfo = estimatePension({
+    annualIncome:   safeNum(profileData.selfIncome,   0),
+    currentAge:     safeNum(profileData.currentAge,  30),
+    retirementAge:  safeNum(profileData.retirementAge, 65),
+    isSelfEmployed: false,
+  });
+  const spousePensionInfo = form.hasSpouse
+    ? estimateSpousePension({
+        spouseIncome:   safeNum(profileData.spouseIncome, 0),
+        spouseAge:      form.spouseAge,
+        retirementAge:  safeNum(profileData.retirementAge, 65),
+        spouseIsWorking: safeNum(profileData.spouseIncome, 0) > 0,
+        isSelfEmployed: false,
+      })
+    : { annual: 0, monthly: 0 };
+
+  const pensionInfo = {
+    selfAnnual:     selfPensionInfo.annual,
+    spouseAnnual:   spousePensionInfo.annual,
+    totalAnnual:    selfPensionInfo.annual + spousePensionInfo.annual,
+    totalMonthly:   Math.round((selfPensionInfo.annual + spousePensionInfo.annual) / 12 * 10) / 10,
+    startAge:       65,
+  };
+
+  // 10. 「年金なし」シミュレーション（グラフの比較表示用）
+  const rowsNoPension = runScenario({ ...form, excludePension: true }, 'standard');
+
   // ── 将来拡張スロット ────────────────────────────────────────
   // TODO: 多軸スコア（収入安定性・支出余裕・資産成長・老後安全）
-  //   const multiAxisScore = calcMultiAxisScore(rows, form, gaugeResult);
-  //
   // TODO: 破綻確率シミュレーション（モンテカルロ/パーセンタイル）
-  //   const bankruptcyProb = calcBankruptcyProbability(form, scenarios);
   // ────────────────────────────────────────────────────────────
 
   return {
     form,
     rows,
+    rowsNoPension,
     summary,
     collapseAge,
     minAsset,
@@ -759,6 +788,7 @@ export const runFullSimulation = (profileData, selectedChoices = []) => {
     gaugeResult,
     housingDetail,
     safetySummary,
+    pensionInfo,
   };
 };
 
