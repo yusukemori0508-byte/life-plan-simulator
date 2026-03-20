@@ -76,13 +76,16 @@ export const profileToSimForm = (profile, selectedChoices = []) => {
     // ── 住宅 ────────────────────────────────────────────────
     if (eventId === 'housing') {
       if (choiceId === 'expensive') {
-        housingType   = 'future_purchase';
-        propertyPrice = 7000;
+        housingType = 'future_purchase';
+        // プロフィールに housingPurchaseAge が設定済み（InputScreen で価格入力済み）の
+        // 場合は profile.propertyPrice を優先。未設定なら選択肢の固定価格を使う。
+        // → これによりシナリオ比較での propertyPrice diff が正しく反映される。
+        if (!p.housingPurchaseAge) propertyPrice = 7000;
       } else if (choiceId === 'mid') {
-        housingType   = 'future_purchase';
-        propertyPrice = 4500;
+        housingType = 'future_purchase';
+        if (!p.housingPurchaseAge) propertyPrice = 4500;
       } else if (choiceId === 'skip') {
-        housingType   = 'rent';
+        housingType = 'rent';
       }
     }
 
