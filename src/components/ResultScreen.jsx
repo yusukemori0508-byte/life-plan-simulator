@@ -797,6 +797,32 @@ export const ResultScreen = ({ onBack, onRestart }) => {
 
         {/* ── フッターボタン ─────────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+
+          {/* アクションページへのボタン */}
+          <button
+            onClick={() => actions.setScreen('action')}
+            style={{
+              width:        '100%',
+              padding:      '16px 24px',
+              borderRadius: 999,
+              border:       'none',
+              background:   'linear-gradient(135deg, #0d9488, #0f766e)',
+              color:        '#fff',
+              fontSize:     15,
+              fontWeight:   700,
+              letterSpacing:'0.05em',
+              cursor:       'pointer',
+              boxShadow:    '0 6px 20px rgba(13,148,136,0.28)',
+              display:      'flex',
+              alignItems:   'center',
+              justifyContent: 'center',
+              gap:          8,
+            }}
+          >
+            <span style={{ fontSize: 18 }}>💡</span>
+            <span>未来を良くするアクションを見る</span>
+          </button>
+
           {/* 主CTA: 条件を変えて再試算 */}
           <button
             onClick={handleRestart}

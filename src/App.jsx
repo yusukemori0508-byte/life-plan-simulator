@@ -13,6 +13,7 @@ import { HomeScreen }       from './components/HomeScreen.jsx';
 import { InputScreen }      from './components/InputScreen.jsx';
 import { SimulationScreen } from './components/SimulationScreen.jsx';
 import { ResultScreen }     from './components/ResultScreen.jsx';
+import { ActionPage }       from './components/ActionPage.jsx';
 
 // ── 未実装画面のプレースホルダー ──────────────────────────────
 // 後続のステップで順次差し替える
@@ -83,6 +84,7 @@ const AppRouter = () => {
       actions.setScreen('simulation');
     },
     toResult:     () => actions.setScreen('result'),
+    toAction:     () => actions.setScreen('action'),
     toTimeline:   () => actions.setScreen('timeline'),
     toRanking:    () => actions.setScreen('ranking'),
     toHome:       () => actions.setScreen('home'),
@@ -90,6 +92,7 @@ const AppRouter = () => {
       fromInput:      () => actions.setScreen('home'),
       fromSimulation: () => actions.setScreen('input'),
       fromResult:     () => actions.setScreen('simulation'),
+      fromAction:     () => actions.setScreen('result'),
       fromTimeline:   () => actions.setScreen('result'),
       fromRanking:    () => actions.setScreen('timeline'),
     },
@@ -129,7 +132,16 @@ const AppRouter = () => {
         />
       )}
 
-      {/* ⑤ タイムライン（実装中） */}
+      {/* ⑤ アクションページ */}
+      {screen === 'action' && (
+        <ActionPage
+          profileData={state.profileData}
+          result={state.resultData}
+          onBack={nav.back.fromAction}
+        />
+      )}
+
+      {/* ⑥ タイムライン（実装中） */}
       {screen === 'timeline' && (
         <PlaceholderScreen
           title="タイムライン"
