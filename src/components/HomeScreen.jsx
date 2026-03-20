@@ -213,29 +213,6 @@ export const HomeScreen = ({ onStart }) => {
           alignItems:     'center',
           gap:            14,
         }}>
-          {/* 補助テキスト */}
-          <div style={{ textAlign: 'center' }}>
-            <div style={{
-              fontSize:    13,
-              fontWeight:  700,
-              color:       'rgba(255,255,255,0.95)',
-              textShadow:  '0 1px 6px rgba(0,0,0,0.40)',
-              letterSpacing: '0.04em',
-              marginBottom: 4,
-            }}>
-              3分で診断
-            </div>
-            <div style={{
-              fontSize:    11,
-              fontWeight:  600,
-              color:       'rgba(255,255,255,0.80)',
-              textShadow:  '0 1px 4px rgba(0,0,0,0.35)',
-              letterSpacing: '0.02em',
-            }}>
-              住宅購入・教育費・老後を一気にチェック
-            </div>
-          </div>
-
           <button
             className="hs-cta-btn"
             onClick={() => setShowPicker(true)}
@@ -267,6 +244,29 @@ export const HomeScreen = ({ onStart }) => {
               width:       '100%',
             }}>はじめる</span>
           </button>
+
+          {/* 補助テキスト（ボタン下） */}
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              fontSize:    13,
+              fontWeight:  700,
+              color:       'rgba(255,255,255,0.95)',
+              textShadow:  '0 1px 6px rgba(0,0,0,0.40)',
+              letterSpacing: '0.04em',
+              marginBottom: 4,
+            }}>
+              3分で診断
+            </div>
+            <div style={{
+              fontSize:    11,
+              fontWeight:  600,
+              color:       'rgba(255,255,255,0.80)',
+              textShadow:  '0 1px 4px rgba(0,0,0,0.35)',
+              letterSpacing: '0.02em',
+            }}>
+              住宅購入・教育費・老後を一気にチェック
+            </div>
+          </div>
         </div>
       )}
 
