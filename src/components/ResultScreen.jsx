@@ -828,6 +828,18 @@ export const ResultScreen = ({ onBack, onRestart }) => {
                   </div>
                 );
               })()}
+
+              {/* ── 試算の前提注記 ── */}
+              <div style={{
+                marginTop: 10, fontSize: 10, color: '#6b7280',
+                lineHeight: 1.7, padding: '8px 10px',
+                background: '#f8fafc', borderRadius: 8,
+                border: '1px solid #e5e7eb',
+              }}>
+                📋 この試算では、<strong>住宅購入後は家賃を0</strong>として、
+                代わりに月返済額・管理費・固定資産税・維持費を支出に反映しています。
+                購入前は現在の住居費（家賃）を支出に含めて計算しています。
+              </div>
             </Card>
           );
         })()}

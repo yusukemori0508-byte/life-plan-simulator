@@ -193,8 +193,14 @@ export const runScenario = (form, scenarioKey) => {
       : safeNum(f.monthlyExpense, 20) * 12;
     const livingExp   = Math.round(baseExpense * inflFactor);
 
-    // ── 住居費 ────────────────────────────────
-    const rentPay     = housingType === 'rent' ? Math.round(monthlyRent * 12 * inflFactor) : 0;
+    // ── 住居費（家賃） ────────────────────────
+    // - rent: 常に家賃を計上
+    // - future_purchase: 購入前（age < purchaseAge）は家賃、購入後（age >= purchaseAge）は0
+    //   ※ 購入後はローン返済（mortgagePay）・住宅維持費（eventCost に含まれる）が代わりに計上
+    // - own: 既に持家なので家賃なし
+    const isPayingRent = housingType === 'rent' ||
+      (housingType === 'future_purchase' && age < purchaseAge);
+    const rentPay = isPayingRent ? Math.round(monthlyRent * 12 * inflFactor) : 0;
 
     // ── 教育費 ────────────────────────────────
     const eduCost = Math.round(calcEducationCostForYear(children, yr));

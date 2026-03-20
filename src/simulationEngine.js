@@ -192,7 +192,19 @@ export const profileToSimForm = (profile, selectedChoices = []) => {
     ? Math.round(spouseIncGross * calcNetRatio(spouseIncGross))
     : 0;
 
+  // ── 住居費（家賃）を生活費から分離 ────────────────────────
+  // expHousing = ユーザーが入力した現在の家賃・住居費（ローン除く）
+  // 賃貸 or 購入予定どちらも「現在は賃貸」なのでこの値が購入前の家賃になる。
+  // monthlyExpense から住居費を引いて「住居費以外の生活費」として扱う。
+  // → 購入後は家賃0・ローン開始のため二重計上を防ぐ。
+  const expHousingMonthly = (housingType === 'rent' || housingType === 'future_purchase')
+    ? safeNum(p.expHousing, 8)   // 入力値優先、デフォルト8万/月
+    : 0;
+  // 住居費を差し引いた純粋な生活費ベース
+  monthlyExpense = Math.max(0, monthlyExpense - expHousingMonthly);
+
   // ── 臨時支出バッファ（医療・慶弔・家電等 ≈ 1.5万/月） ─────
+  // バッファは住居費以外の生活費にのみ乗せる
   monthlyExpense = monthlyExpense + MONTHLY_BUFFER;
 
   // ── 既存借入・固定返済（住宅ローン・車ローン・奨学金等） ──
@@ -298,7 +310,10 @@ export const profileToSimForm = (profile, selectedChoices = []) => {
 
     // ── 住居 ──────────────────────────────────────────────
     housingType,
-    monthlyRent:   housingType === 'rent' ? 8 : 0,
+    // monthlyRent: ユーザー入力の住居費（expHousing）を使用。
+    // rent → 常に賃料として計上
+    // future_purchase → 購入前のみ賃料として計上（simulation.js 側で購入年齢判定）
+    monthlyRent: expHousingMonthly,
     propertyPrice,
     downPayment,
     mortgageRate:  safeNum(p.mortgageRate, HOUSING_DEFAULTS.mortgageRate),
