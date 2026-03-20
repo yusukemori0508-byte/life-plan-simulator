@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>ライフプランシミュレーター</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
+                   'Noto Sans JP', 'Yu Gothic', sans-serif;
+      background: #0a160c;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font-family: inherit; }
+    input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; }
+    input[type=range]::-moz-range-thumb { appearance: none; border: none; background: transparent; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    /* ═══════════════════════════════════════
+       計算エンジン
+    ═══════════════════════════════════════ */
+    function calcMVP({ income, expense, investment }) {
+      const annualExpense    = expense * 12;
+      const annualInvestment = investment * 12;
+      const annualCashFlow   = income - annualExpense;
+
+      let cashSavings  = 0;
+      let investAssets = 0;
+      let hasNegative  = false;
+
+      for (let y = 0; y < 35; y++) {
+        cashSavings  += annualCashFlow - annualInvestment;
+        investAssets  = (investAssets + annualInvestment) * 1.05;
+        if (cashSavings + investAssets < 0) hasNegative = true;
+      }
+
+      const pensionAnnual = 180;
+      const retireExpense = annualExpense * 0.85;
+      const shortfall     = Math.max(0, retireExpense - pensionAnnual);
+
+      for (let y = 0; y < 25; y++) {
+        investAssets = investAssets * 1.03;
+        if (cashSavings >= shortfall) {
+          cashSavings -= shortfall;
+        } else {
+          investAssets -= (shortfall - cashSavings);
+          cashSavings   = 0;
+        }
+        if (cashSavings + investAssets < 0) hasNegative = true;
+      }
+
+      const totalAssets = Math.round(cashSavings + investAssets);
+      let level;
+      if      (totalAssets >= 1000 && !hasNegative) level = 1;
+      else if (totalAssets >= 300  && !hasNegative) level = 2;
+      else if (totalAssets >= 0)                    level = 3;
+      else                                          level = 4;
+
+      return { totalAssets, hasNegative, level };
+    }
+
+    /* 年次推移データ生成（CSV出力用） */
+    function calcYearlyData({ income, expense, investment }) {
+      const annualExpense    = expense * 12;
+      const annualInvestment = investment * 12;
+      const annualCashFlow   = income - annualExpense;
+      const pensionAnnual    = 180;
+      const retireExpense    = annualExpense * 0.85;
+      const shortfall        = Math.max(0, retireExpense - pensionAnnual);
+
+      const rows = [];
+      let cashSavings = 0, investAssets = 0;
+
+      for (let y = 1; y <= 35; y++) {
+        cashSavings  += annualCashFlow - annualInvestment;
+        investAssets  = (investAssets + annualInvestment) * 1.05;
+        rows.push({
+          年: y, フェーズ: '積立期間',
+          現金貯蓄_万円: Math.round(cashSavings),
+          投資資産_万円: Math.round(investAssets),
+          合計資産_万円: Math.round(cashSavings + investAssets),
+        });
+      }
+      for (let y = 1; y <= 25; y++) {
+        investAssets = investAssets * 1.03;
+        if (cashSavings >= shortfall) {
+          cashSavings -= shortfall;
+        } else {
+          investAssets -= (shortfall - cashSavings);
+          cashSavings = 0;
+        }
+        rows.push({
+          年: 35 + y, フェーズ: '老後期間',
+          現金貯蓄_万円: Math.round(cashSavings),
+          投資資産_万円: Math.round(investAssets),
+          合計資産_万円: Math.round(cashSavings + investAssets),
+        });
+      }
+      return rows;
+    }
+
+    /* CSV ダウンロードヘルパー */
+    function downloadCSV(inputs) {
+      const rows = calcYearlyData(inputs);
+      const header = ['年', 'フェーズ', '現金貯蓄(万円)', '投資資産(万円)', '合計資産(万円)'];
+      const body = rows.map(r =>
+        [r.年, r.フェーズ, r.現金貯蓄_万円, r.投資資産_万円, r.合計資産_万円].join(',')
+      );
+      const meta = [
+        `# ライフプランシミュレーター 試算結果`,
+        `# 月収(万円):${inputs.income / 12 | 0}  月支出(万円):${inputs.expense}  月投資(万円):${inputs.investment}`,
+        `# 年収(万円):${inputs.income}`,
+        '',
+      ].join('\n');
+      const csv = '\uFEFF' + meta + header.join(',') + '\n' + body.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'lifeplan_result.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    const LEVEL_INFO = {
+      1: { label: 'とても安心な未来です', emoji: '🌳', accent: '#68ffaa' },
+      2: { label: '安心な未来です',       emoji: '🌿', accent: '#88ffb8' },
+      3: { label: '少し不安があります',    emoji: '🌱', accent: '#e8e870' },
+      4: { label: '見直しが必要です',      emoji: '🍂', accent: '#ffb870' },
+    };
+
+    /* ═══════════════════════════════════════
+       LifeTree SVG（入力画面ミニ＋結果画面）
+    ═══════════════════════════════════════ */
+    const CFG = {
+      1: { base:'#1c5030', mid:'#2a7048', body:'#389860', leftOp:0.90, shadowOp:0.30, hlOp:0.72, exOp:0.58, ygOp:0.68,
+           fruits:[[64,92,10],[84,148,9],[108,58,7.5],[222,100,10],[252,132,8.5],[192,174,7.5],[162,152,6.5],[242,64,6]], scale:1.00 },
+      2: { base:'#215038', mid:'#2e6c46', body:'#3c8858', leftOp:0.76, shadowOp:0.34, hlOp:0.62, exOp:0.46, ygOp:0.56,
+           fruits:[[64,92,10],[84,148,9],[222,100,10],[192,174,7.5],[162,152,6.5]], scale:0.90 },
+      3: { base:'#3a6040', mid:'#4a7252', body:'#5a8462', leftOp:0.50, shadowOp:0.24, hlOp:0.46, exOp:0.32, ygOp:0.36,
+           fruits:[[64,92,10],[222,100,10],[162,152,6.5]], scale:0.76 },
+      4: { base:'#4a5838', mid:'#5a6848', body:'#687258', leftOp:0.28, shadowOp:0.14, hlOp:0.32, exOp:0.18, ygOp:0.18,
+           fruits:[[64,92,10]], scale:0.60 },
+    };
+
+    const LifeTree = ({ level = 1, style }) => {
+      const c = CFG[level] || CFG[1];
+      const scale = c.scale;
+      const tx = 155 * (1 - scale);
+      const ty = 140 * (1 - scale);
+      return (
+        <div style={{ display:'flex', justifyContent:'center', ...style }}>
+          <svg viewBox="0 0 320 268" width="100%" style={{ display:'block', maxWidth:320 }} aria-hidden="true">
+            <defs>
+              <radialGradient id="ltSun" cx="28%" cy="16%" r="62%">
+                <stop offset="0%" stopColor="#fff8a8" stopOpacity="0.55"/>
+                <stop offset="100%" stopColor="#c8f090" stopOpacity="0"/>
+              </radialGradient>
+              <radialGradient id="ltLeft" cx="30%" cy="44%" r="68%">
+                <stop offset="0%" stopColor="#78d840" stopOpacity={c.leftOp}/>
+                <stop offset="100%" stopColor="#48a858" stopOpacity="0"/>
+              </radialGradient>
+              <linearGradient id="ltTk" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%"   stopColor="#4a2808"/>
+                <stop offset="28%"  stopColor="#7a4825"/>
+                <stop offset="55%"  stopColor="#a87038"/>
+                <stop offset="80%"  stopColor="#be8848"/>
+                <stop offset="100%" stopColor="#5c3618"/>
+              </linearGradient>
+              <filter id="ltSoft" x="-18%" y="-18%" width="136%" height="136%">
+                <feGaussianBlur stdDeviation="2.2"/>
+              </filter>
+              <filter id="ltAmb" x="-35%" y="-35%" width="170%" height="170%">
+                <feGaussianBlur stdDeviation="8"/>
+              </filter>
+            </defs>
+            <g transform={`translate(${tx},${ty}) scale(${scale})`}>
+              <ellipse cx="155" cy="258" rx="124" ry="20" fill="#082015" opacity="0.14" filter="url(#ltAmb)"/>
+              <path fill={c.base} d="M155,16 C183,6 222,12 250,33 C274,51 284,79 282,104 C280,124 293,140 287,158 C281,175 265,186 247,192 C228,198 207,200 186,202 C170,203 161,203 155,203 C149,203 140,203 124,202 C103,200 82,198 63,192 C45,186 29,175 23,158 C17,140 30,124 28,104 C26,79 36,51 60,33 C88,12 127,6 155,16 Z"/>
+              <path fill={c.mid}  d="M155,20 C181,11 218,17 244,37 C266,55 276,81 274,105 C272,123 285,138 279,155 C273,171 258,181 240,187 C222,193 201,195 182,197 C167,198 159,198 155,198 C151,198 143,198 128,197 C109,195 88,193 70,187 C52,181 37,171 31,155 C25,138 38,123 36,105 C34,81 44,55 66,37 C92,17 129,11 155,20 Z"/>
+              <path fill={c.body} d="M155,26 C179,17 212,23 236,42 C258,59 266,83 264,106 C262,122 273,135 268,150 C263,164 250,173 234,178 C217,183 198,185 180,186 C168,187 160,187 155,187 C150,187 142,187 130,186 C112,185 93,183 76,178 C60,173 47,164 42,150 C37,135 48,122 46,106 C44,83 52,59 74,42 C98,23 131,17 155,26 Z"/>
+              <ellipse cx="110" cy="108" rx="108" ry="88" fill="url(#ltLeft)"/>
+              <ellipse cx="115" cy="64"  rx="118" ry="86" fill="url(#ltSun)"/>
+              <ellipse cx="98"  cy="44"  rx="62"  ry="44" fill="#fffce0" opacity="0.10"/>
+              <ellipse cx="88"  cy="70"  rx="56" ry="42" fill="#78cc40" opacity={c.hlOp} filter="url(#ltSoft)"/>
+              <ellipse cx="68"  cy="52"  rx="30" ry="22" fill="#a8e840" opacity={c.exOp} filter="url(#ltSoft)"/>
+              <ellipse cx="206" cy="120" rx="96" ry="80" fill="#0e2212" opacity={c.shadowOp}/>
+              <ellipse cx="78"  cy="64"  rx="28" ry="18" fill="#a0e050" opacity={c.ygOp}        transform="rotate(-26 78 64)"  filter="url(#ltSoft)"/>
+              <ellipse cx="54"  cy="98"  rx="22" ry="14" fill="#8ed845" opacity={c.ygOp*0.85}   transform="rotate(16 54 98)"   filter="url(#ltSoft)"/>
+              <ellipse cx="104" cy="38"  rx="26" ry="16" fill="#96e250" opacity={c.ygOp*0.90}   transform="rotate(-16 104 38)" filter="url(#ltSoft)"/>
+              <ellipse cx="150" cy="20"  rx="20" ry="13" fill="#a6ea58" opacity={c.ygOp*0.80}   transform="rotate(-5 150 20)"  filter="url(#ltSoft)"/>
+              <ellipse cx="228" cy="54"  rx="18" ry="12" fill="#90d848" opacity={c.ygOp*0.60}   transform="rotate(20 228 54)"  filter="url(#ltSoft)"/>
+              {c.fruits.map(([fx,fy,fr],i) => (
+                <g key={i}>
+                  <circle cx={fx}           cy={fy}           r={fr}        fill="#E45810"/>
+                  <circle cx={fx-fr*0.24}   cy={fy-fr*0.28}   r={fr*0.36}  fill="#FFD890" opacity="0.54"/>
+                </g>
+              ))}
+              <path d="M155,262 Q133,252 115,260" stroke="url(#ltTk)" strokeWidth="9"  fill="none" strokeLinecap="round"/>
+              <path d="M155,262 Q177,252 195,260" stroke="url(#ltTk)" strokeWidth="9"  fill="none" strokeLinecap="round"/>
+              <path d="M155,262 Q145,256 133,262" stroke="url(#ltTk)" strokeWidth="6"  fill="none" strokeLinecap="round"/>
+              <path d="M155,262 Q165,256 177,262" stroke="url(#ltTk)" strokeWidth="6"  fill="none" strokeLinecap="round"/>
+              <path d="M138,264 C135,244 132,221 136,198 C139,184 145,171 155,165 C165,171 171,184 174,198 C178,221 175,244 172,264 Z" fill="url(#ltTk)"/>
+              <path d="M148,264 C145,244 143,221 146,198 C148,186 151,174 155,167 C157,175 157,188 158,204 C160,224 162,244 162,264 Z" fill="#b87838" opacity="0.38"/>
+              <path d="M138,264 C135,244 132,221 136,198 C138,186 142,174 147,167 C144,178 142,192 141,208 C140,228 140,248 140,264 Z" fill="#2e1004" opacity="0.24"/>
+              {level >= 3 && (
+                <ellipse cx="155" cy="110" rx="130" ry="100" fill="#a05a10" opacity={level===4?0.22:0.10}/>
+              )}
+            </g>
+          </svg>
+        </div>
+      );
+    };
+
+    /* ═══════════════════════════════════════
+       ライフタイプ定義
+    ═══════════════════════════════════════ */
+    const LIFE_TYPES = [
+      { id:'single', label:'一人暮らし', icon:'🌱', sub:'自分のペースで', defaults:{ income:380,  expense:16, investment:2 } },
+      { id:'couple', label:'共働き',     icon:'🌿', sub:'ふたりで育てる', defaults:{ income:750,  expense:28, investment:5 } },
+      { id:'family', label:'子育て',     icon:'🍃', sub:'家族の未来へ',   defaults:{ income:600,  expense:32, investment:3 } },
+    ];
+
+    /* ═══════════════════════════════════════
+       ホーム画面
+    ═══════════════════════════════════════ */
+    const HomeScreen = ({ onStart }) => {
+      const [showPicker, setShowPicker] = useState(false);
+      const [lifeType,   setLifeType]   = useState('couple');
+      const selected = LIFE_TYPES.find(lt => lt.id === lifeType) || LIFE_TYPES[1];
+
+      return (
+        <div style={{ height:'100vh', position:'relative', overflow:'hidden' }}>
+          <style>{`
+            @keyframes hsFadeDown  { from{opacity:0;transform:translateY(-18px);}to{opacity:1;transform:translateY(0);} }
+            @keyframes hsFadeUp    { from{opacity:0;transform:translateY(28px);}to{opacity:1;transform:translateY(0);} }
+            @keyframes hsPickerUp  { from{opacity:0;transform:translateY(100%);}to{opacity:1;transform:translateY(0);} }
+            @keyframes hsPulse {
+              0%,100%{ box-shadow:0 8px 32px rgba(47,150,88,0.50), 0 0 0 0 rgba(93,218,136,0.40), inset 0 1px 0 rgba(255,255,255,0.25); }
+              50%    { box-shadow:0 12px 40px rgba(47,150,88,0.60), 0 0 0 18px rgba(93,218,136,0), inset 0 1px 0 rgba(255,255,255,0.25); }
+            }
+            .hs-cta-btn {
+              animation: hsFadeUp 0.9s cubic-bezier(0.22,1,0.36,1) 0.4s both,
+                         hsPulse 2.6s ease-in-out 1.4s infinite;
+            }
+            .hs-cta-btn:active { transform:translate(-50%,-50%) scale(0.93) !important; }
+            .hs-type-btn { transition:transform 0.18s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s ease; }
+            .hs-type-btn:active { transform:scale(0.96) !important; }
+          `}</style>
+
+          {/* 空を青空寄りに補正するグラデーションオーバーレイ */}
+          <div style={{
+            position:'absolute', inset:0, zIndex:1, pointerEvents:'none',
+            background:'linear-gradient(180deg,'
+              +'rgba(100,158,210,0.22) 0%,'
+              +'rgba(120,170,215,0.10) 18%,'
+              +'rgba(255,255,255,0.00) 40%,'
+              +'rgba(245,242,234,0.38) 70%,'
+              +'rgba(245,242,234,0.78) 100%)',
+          }}/>
+
+          {/* 中心部の白いブルームを緩和するラジアルオーバーレイ */}
+          <div style={{
+            position:'absolute', inset:0, zIndex:2, pointerEvents:'none',
+            background:'radial-gradient(ellipse 72% 38% at 50% 42%,'
+              +'rgba(80,140,100,0.13) 0%,'
+              +'rgba(80,140,100,0.00) 100%)',
+          }}/>
+
+          {/* タイトル */}
+          <div style={{
+            position:'absolute', top:0, left:0, right:0,
+            textAlign:'center', padding:'72px 24px 0',
+            zIndex:10, pointerEvents:'none',
+            animation:'hsFadeDown 0.8s cubic-bezier(0.22,1,0.36,1) both',
+          }}>
+            <div style={{
+              fontSize:11, fontWeight:800, letterSpacing:'0.30em',
+              color:'rgba(255,255,255,0.92)',
+              textShadow:'0 1px 8px rgba(0,0,0,0.35)',
+              marginBottom:10, textTransform:'uppercase',
+            }}>
+              Life Plan Simulator
+            </div>
+            <div style={{
+              fontSize:30, fontWeight:900, color:'#fff',
+              lineHeight:1.22, letterSpacing:'0.01em',
+              textShadow:'0 1px 10px rgba(0,0,0,0.28)',
+            }}>
+              あなたの未来を、<br />育てよう。
+            </div>
+          </div>
+
+          {/* 丸形スタートボタン */}
+          {!showPicker && (
+            <div style={{
+              position:'absolute', top:'56%', left:'50%',
+              transform:'translate(-50%,-50%)',
+              zIndex:20,
+            }}>
+              <button
+                className="hs-cta-btn"
+                onClick={() => setShowPicker(true)}
+                style={{
+                  width:128, height:128, borderRadius:'50%',
+                  border:'3px solid rgba(255,255,255,0.45)',
+                  background:'linear-gradient(145deg,#5dda88 0%,#2d9650 60%,#236e3c 100%)',
+                  cursor:'pointer',
+                  display:'flex', flexDirection:'column',
+                  alignItems:'center', justifyContent:'center',
+                  gap:4, padding:0,
+                }}
+              >
+                <span style={{ fontSize:34, lineHeight:1 }}>🌱</span>
+                <span style={{
+                  fontSize:13, fontWeight:900, color:'#fff',
+                  letterSpacing:'0.04em',
+                  textShadow:'0 1px 4px rgba(0,0,0,0.30)',
+                }}>はじめる</span>
+              </button>
+            </div>
+          )}
+
+          {/* ── DEBUG: state切り替え確認 ── */}
+          {showPicker && (
+            <div style={{
+              position:'absolute', inset:0, zIndex:50,
+              display:'flex', alignItems:'center', justifyContent:'center',
+              background:'rgba(0,0,0,0.7)',
+            }}>
+              <div style={{
+                fontSize:40, fontWeight:900, color:'#0f0',
+                textAlign:'center',
+              }}>
+                SELECT MODE<br />
+                <span style={{ fontSize:16 }}>state 切り替え OK</span>
+              </div>
+            </div>
+          )}
+
+          {/* ライフタイプピッカー（DEBUG後に復元） */}
+          {false && (
+            <div style={{
+              position:'absolute', bottom:0, left:0, right:0,
+              zIndex:30,
+              animation:'hsPickerUp 0.48s cubic-bezier(0.22,1,0.36,1) both',
+            }}>
+              <div style={{
+                background:'rgba(250,248,242,0.94)',
+                backdropFilter:'blur(18px)',
+                WebkitBackdropFilter:'blur(18px)',
+                borderRadius:'28px 28px 0 0',
+                border:'1px solid rgba(255,255,255,0.65)',
+                boxShadow:'0 -10px 48px rgba(0,0,0,0.14)',
+                padding:'10px 20px 48px',
+              }}>
+                <div style={{
+                  width:40, height:4, borderRadius:2,
+                  background:'rgba(100,130,100,0.28)',
+                  margin:'12px auto 20px',
+                }}/>
+                <div style={{
+                  textAlign:'center', fontSize:13, fontWeight:800,
+                  color:'#5a8060', letterSpacing:'0.08em', marginBottom:16,
+                }}>
+                  🍃 どのライフタイプ？
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:18 }}>
+                  {LIFE_TYPES.map(lt => {
+                    const active = lifeType === lt.id;
+                    return (
+                      <button
+                        key={lt.id}
+                        className="hs-type-btn"
+                        onClick={() => setLifeType(lt.id)}
+                        style={{
+                          borderRadius:20,
+                          border: active ? '2.5px solid #3fa567' : '1.5px solid rgba(160,200,160,0.55)',
+                          background: active
+                            ? 'linear-gradient(145deg,#e2f8eb,#cdf0dc)'
+                            : 'rgba(255,255,255,0.78)',
+                          padding:'16px 8px 14px', cursor:'pointer',
+                          transform: active ? 'scale(1.05) translateY(-2px)' : 'scale(1)',
+                          boxShadow: active
+                            ? '0 8px 22px rgba(58,152,96,0.22)'
+                            : '0 2px 10px rgba(0,0,0,0.05)',
+                        }}
+                      >
+                        <div style={{ fontSize:28, lineHeight:1, marginBottom:7 }}>{lt.icon}</div>
+                        <div style={{
+                          fontSize:13, fontWeight:900,
+                          color: active ? '#1b4a28' : '#2e4a32',
+                          lineHeight:1.2, marginBottom:4,
+                        }}>{lt.label}</div>
+                        <div style={{
+                          fontSize:10, fontWeight:600,
+                          color: active ? '#4a8a5a' : 'rgba(80,110,80,0.65)',
+                        }}>{lt.sub}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={() => onStart(selected.defaults)}
+                  style={{
+                    width:'100%', border:'none', borderRadius:999,
+                    padding:'18px 24px', fontSize:19, fontWeight:900,
+                    color:'#fff',
+                    background:'linear-gradient(135deg,#50cc78 0%,#2d9650 100%)',
+                    boxShadow:'0 12px 28px rgba(47,150,88,0.32)',
+                    cursor:'pointer', letterSpacing:'0.03em',
+                  }}
+                >
+                  🌿 このタイプで始める
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    /* ═══════════════════════════════════════
+       スライダーカード（入力画面用ガラス）
+    ═══════════════════════════════════════ */
+    const SliderCard = ({ icon, label, unit, value, min, max, step, onChange, format, accent }) => {
+      const pct = ((value - min) / (max - min)) * 100;
+      return (
+        <div>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:9 }}>
+              <span style={{ fontSize:20 }}>{icon}</span>
+              <span style={{ fontSize:13, fontWeight:800, color:'rgba(255,255,255,0.88)' }}>{label}</span>
+            </div>
+            <div style={{
+              fontSize:17, fontWeight:900, color:'#fff',
+              background:`${accent}28`,
+              border:`1px solid ${accent}50`,
+              borderRadius:10, padding:'3px 10px',
+            }}>
+              {format(value)}
+              <span style={{ fontSize:10, color:'rgba(255,255,255,0.58)', marginLeft:2 }}>{unit}</span>
+            </div>
+          </div>
+          <div style={{ position:'relative', height:36, display:'flex', alignItems:'center' }}>
+            <div style={{
+              position:'absolute', left:0, right:0, height:5,
+              borderRadius:3, background:'rgba(255,255,255,0.16)', overflow:'hidden',
+            }}>
+              <div style={{
+                width:`${pct}%`, height:'100%',
+                background:`linear-gradient(90deg, ${accent}70, ${accent})`,
+                borderRadius:3, transition:'width 0.15s ease',
+              }}/>
+            </div>
+            <input
+              type="range" min={min} max={max} step={step} value={value}
+              onChange={e => onChange(Number(e.target.value))}
+              style={{ position:'absolute', left:0, right:0, width:'100%', height:36, opacity:0, zIndex:2, margin:0, padding:0 }}
+            />
+            <div style={{
+              position:'absolute', left:`calc(${pct}% - 11px)`,
+              width:22, height:22, borderRadius:'50%',
+              background:'#fff',
+              boxShadow:`0 2px 10px rgba(0,0,0,0.35), 0 0 0 3px ${accent}`,
+              transition:'left 0.1s ease', pointerEvents:'none',
+            }}/>
+          </div>
+          <div style={{ display:'flex', justifyContent:'space-between', marginTop:2 }}>
+            <span style={{ fontSize:9, color:'rgba(255,255,255,0.32)', fontWeight:600 }}>{format(min)}{unit}</span>
+            <span style={{ fontSize:9, color:'rgba(255,255,255,0.32)', fontWeight:600 }}>{format(max)}{unit}</span>
+          </div>
+        </div>
+      );
+    };
+
+    /* ═══════════════════════════════════════
+       入力画面
+    ═══════════════════════════════════════ */
+    const InputScreen = ({ onBack, onResult, initialInputs }) => {
+      const [income,     setIncome]     = useState(initialInputs.income     || 450);
+      const [expense,    setExpense]    = useState(initialInputs.expense    || 20);
+      const [investment, setInvestment] = useState(initialInputs.investment || 3);
+      const [shake,      setShake]      = useState(false);
+
+      const preview = useMemo(() => calcMVP({ income, expense, investment }), [income, expense, investment]);
+
+      const handleChange = setter => val => {
+        setter(val);
+        setShake(true);
+        setTimeout(() => setShake(false), 380);
+      };
+
+      const LEVEL_MSG = {
+        1: { text:'この調子！とても安心です 🌳', color:'#68ffaa' },
+        2: { text:'いい感じです 🌿',             color:'#88ffb8' },
+        3: { text:'もう少し調整してみましょう 🌱', color:'#e8e870' },
+        4: { text:'見直しが必要かも 🍂',          color:'#ffb870' },
+      };
+      const msg = LEVEL_MSG[preview.level];
+
+      return (
+        <div style={{ height:'100vh', display:'flex', flexDirection:'column' }}>
+          <style>{`
+            @keyframes treeShake { 0%,100%{transform:rotate(0deg);}25%{transform:rotate(-2.5deg);}75%{transform:rotate(2.5deg);} }
+          `}</style>
+
+          {/* ヘッダー */}
+          <div style={{ display:'flex', alignItems:'center', gap:12, padding:'16px 20px 10px' }}>
+            <button
+              onClick={onBack}
+              style={{
+                width:40, height:40, borderRadius:'50%',
+                border:'1.5px solid rgba(255,255,255,0.28)',
+                background:'rgba(255,255,255,0.10)',
+                backdropFilter:'blur(12px)',
+                WebkitBackdropFilter:'blur(12px)',
+                cursor:'pointer', fontSize:16, color:'#fff',
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}
+            >←</button>
+            <div style={{ fontSize:13, fontWeight:800, color:'rgba(255,255,255,0.88)', letterSpacing:0.5 }}>
+              未来を育てる
+            </div>
+          </div>
+
+          {/* ミニ木 + 成長ゲージ */}
+          <div style={{ display:'flex', alignItems:'center', gap:16, padding:'4px 22px 8px' }}>
+            <div style={{
+              width:76, flexShrink:0,
+              animation: shake ? 'treeShake 0.38s ease' : 'none',
+              filter:'drop-shadow(0 6px 16px rgba(0,0,0,0.45))',
+            }}>
+              <LifeTree level={preview.level} />
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{
+                height:7, borderRadius:4,
+                background:'rgba(255,255,255,0.15)',
+                overflow:'hidden', marginBottom:8,
+              }}>
+                <div style={{
+                  height:'100%',
+                  width:`${[100,70,40,12][preview.level-1]}%`,
+                  background:'linear-gradient(90deg, #48e878, #90ffb8)',
+                  borderRadius:4,
+                  transition:'width 0.45s cubic-bezier(0.34,1.2,0.64,1)',
+                }}/>
+              </div>
+              <div style={{
+                fontSize:12, fontWeight:700,
+                color:msg.color,
+                textShadow:'0 1px 8px rgba(0,0,0,0.45)',
+              }}>
+                {msg.text}
+              </div>
+            </div>
+          </div>
+
+          {/* ガラス スライダーパネル */}
+          <div style={{
+            flex:1,
+            margin:'6px 16px 0',
+            background:'rgba(255,255,255,0.09)',
+            backdropFilter:'blur(26px)',
+            WebkitBackdropFilter:'blur(26px)',
+            borderRadius:26,
+            border:'1px solid rgba(255,255,255,0.16)',
+            padding:'20px 18px',
+            display:'flex', flexDirection:'column', gap:20,
+          }}>
+            <SliderCard icon="💴" label="年収"       unit="万円/年" value={income}     min={200} max={1200} step={50}  onChange={handleChange(setIncome)}     format={v=>`${v}`}                              accent="#60e890"/>
+            <SliderCard icon="🛒" label="月の支出"   unit="万円/月" value={expense}    min={8}   max={60}   step={1}   onChange={handleChange(setExpense)}    format={v=>`${v}`}                              accent="#60c8f8"/>
+            <SliderCard icon="📈" label="月の投資額" unit="万円/月" value={investment} min={0}   max={15}   step={0.5} onChange={handleChange(setInvestment)} format={v=>v%1===0?`${v}`:v.toFixed(1)}        accent="#f8b860"/>
+            <div style={{ fontSize:10, color:'rgba(255,255,255,0.38)', textAlign:'center' }}>
+              スライダーを動かすと木が育ちます 🌿
+            </div>
+          </div>
+
+          {/* CTA */}
+          <div style={{ padding:'14px 16px 50px' }}>
+            <button
+              onClick={() => onResult({ income, expense, investment })}
+              style={{
+                width:'100%', padding:'20px',
+                borderRadius:28, border:'none',
+                background:'linear-gradient(135deg, #50d878 0%, #1e9050 100%)',
+                color:'#fff', fontSize:18, fontWeight:900,
+                cursor:'pointer', letterSpacing:'0.04em',
+                boxShadow:'0 10px 40px rgba(0,80,30,0.60)',
+              }}
+            >
+              🌳 未来を見てみる
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    /* ═══════════════════════════════════════
+       結果画面
+    ═══════════════════════════════════════ */
+    const fmt = n => n >= 0 ? `+${n.toLocaleString()}万円` : `${n.toLocaleString()}万円`;
+
+    const MVPResultScreen = ({ inputs, onBack }) => {
+      const result  = useMemo(() => calcMVP(inputs), [inputs]);
+      const info    = LEVEL_INFO[result.level];
+      const [revealed, setRevealed] = useState(false);
+
+      useEffect(() => {
+        const t = setTimeout(() => setRevealed(true), 350);
+        return () => clearTimeout(t);
+      }, []);
+
+      return (
+        <div style={{ height:'100vh', display:'flex', flexDirection:'column' }}>
+          <style>{`
+            @keyframes resultTreeGrow { 0%{opacity:0;transform:scale(0.65) translateY(20px);} 100%{opacity:1;transform:scale(1) translateY(0);} }
+            @keyframes resultPanelUp  { from{opacity:0;transform:translateY(36px);} to{opacity:1;transform:translateY(0);} }
+            @keyframes scoreReveal    { from{opacity:0;transform:scale(0.80);} to{opacity:1;transform:scale(1);} }
+          `}</style>
+
+          {/* ヘッダー */}
+          <div style={{ display:'flex', alignItems:'center', gap:12, padding:'18px 20px 0' }}>
+            <button
+              onClick={onBack}
+              style={{
+                width:40, height:40, borderRadius:'50%',
+                border:'1.5px solid rgba(255,255,255,0.28)',
+                background:'rgba(255,255,255,0.10)',
+                backdropFilter:'blur(12px)',
+                WebkitBackdropFilter:'blur(12px)',
+                cursor:'pointer', fontSize:15, color:'#fff',
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}
+            >←</button>
+            <div style={{ fontSize:13, fontWeight:800, color:'rgba(255,255,255,0.85)' }}>
+              あなたの未来の木
+            </div>
+          </div>
+
+          {/* LifeTree SVG ── 画面の主役 */}
+          <div style={{
+            flex:1,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            padding:'12px 28px 0',
+            animation: revealed ? 'resultTreeGrow 0.80s cubic-bezier(0.34,1.2,0.64,1) both' : 'none',
+            opacity: revealed ? undefined : 0,
+          }}>
+            <div style={{
+              width:'72%', maxWidth:270,
+              filter:'drop-shadow(0 14px 34px rgba(0,0,0,0.42))',
+            }}>
+              <LifeTree level={result.level} />
+            </div>
+          </div>
+
+          {/* ガラス 結果カード */}
+          <div style={{
+            background:'rgba(8,20,12,0.58)',
+            backdropFilter:'blur(28px)',
+            WebkitBackdropFilter:'blur(28px)',
+            borderTop:'1px solid rgba(255,255,255,0.18)',
+            borderRadius:'28px 28px 0 0',
+            padding:'22px 20px 52px',
+            animation: revealed ? 'resultPanelUp 0.65s cubic-bezier(0.22,1,0.36,1) 0.38s both' : 'none',
+            opacity: revealed ? undefined : 0,
+          }}>
+            {/* 評価 */}
+            <div style={{ textAlign:'center', marginBottom:14 }}>
+              <div style={{ fontSize:42, lineHeight:1, marginBottom:8 }}>{info.emoji}</div>
+              <div style={{
+                fontSize:20, fontWeight:900, color:'#fff',
+                textShadow:'0 2px 14px rgba(0,0,0,0.42)',
+              }}>
+                {info.label}
+              </div>
+            </div>
+
+            {/* 老後余裕額 */}
+            <div style={{
+              background:'rgba(255,255,255,0.11)',
+              border:'1px solid rgba(255,255,255,0.18)',
+              borderRadius:18, padding:'15px',
+              textAlign:'center', marginBottom:14,
+            }}>
+              <div style={{
+                fontSize:10, color:'rgba(255,255,255,0.58)',
+                fontWeight:700, letterSpacing:1.5, marginBottom:6,
+              }}>
+                老後余裕額（推定）
+              </div>
+              <div style={{
+                fontSize:30, fontWeight:900, color:'#fff',
+                textShadow:'0 2px 12px rgba(0,0,0,0.35)',
+                animation: revealed ? 'scoreReveal 0.5s ease 0.85s both' : 'none',
+                opacity: revealed ? undefined : 0,
+              }}>
+                {fmt(result.totalAssets)}
+              </div>
+              <div style={{ fontSize:9, color:'rgba(255,255,255,0.40)', marginTop:4 }}>
+                ※ 65歳〜90歳までの概算
+              </div>
+            </div>
+
+            {/* サブメッセージ */}
+            <div style={{
+              fontSize:12, color:'rgba(255,255,255,0.70)',
+              textAlign:'center', lineHeight:1.80, marginBottom:20,
+            }}>
+              {result.level===1 && 'このままのペースで続ければ、安心した老後を迎えられます。'}
+              {result.level===2 && '着実に積み上げています。少し投資を増やすとさらに安心です。'}
+              {result.level===3 && '支出を少し見直すか、投資を増やすと大きく改善します。'}
+              {result.level===4 && '収支バランスを見直す必要があります。まず支出から確認しましょう。'}
+            </div>
+
+            {/* CTA */}
+            <button
+              onClick={onBack}
+              style={{
+                width:'100%', padding:'18px',
+                borderRadius:26, border:'none',
+                background:'linear-gradient(135deg, #50d878 0%, #1e9050 100%)',
+                color:'#fff', fontSize:17, fontWeight:900,
+                cursor:'pointer', letterSpacing:'0.04em',
+                boxShadow:'0 8px 32px rgba(0,80,30,0.50)',
+                marginBottom:12,
+              }}
+            >
+              🌱 もう少し育てる
+            </button>
+
+            {/* CSV出力 */}
+            <button
+              onClick={() => downloadCSV(inputs)}
+              style={{
+                width:'100%', padding:'13px',
+                borderRadius:22,
+                border:'1px solid rgba(255,255,255,0.22)',
+                background:'rgba(255,255,255,0.08)',
+                backdropFilter:'blur(12px)',
+                WebkitBackdropFilter:'blur(12px)',
+                color:'rgba(255,255,255,0.78)',
+                fontSize:13, fontWeight:700,
+                cursor:'pointer', letterSpacing:'0.03em',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+              }}
+            >
+              <span style={{ fontSize:15 }}>📥</span> 試算データをCSVで保存
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    /* ═══════════════════════════════════════
+       App ── 全画面ツリー背景 + 3画面ルーティング
+    ═══════════════════════════════════════ */
+    const STORAGE_KEY = 'lifetree_mvp_v2';
+    const loadInputs  = () => { try { const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; } catch{return null;} };
+    const saveInputs  = d  => { try { localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); } catch{} };
+    const DEFAULT_INPUTS = { income:450, expense:20, investment:3 };
+
+    /* 背景フィルター（レベル別・画面別） */
+    const BG_FILTER = {
+      home:   'saturate(1.18) brightness(0.88) contrast(1.04)',
+      input:  'saturate(1.08) brightness(0.82)',
+      result: [
+        'saturate(1.18) brightness(0.90)',  // lv1: 生き生き
+        'saturate(1.05) brightness(0.86)',  // lv2: 健全
+        'saturate(0.72) brightness(0.80)',  // lv3: やや秋
+        'saturate(0.38) brightness(0.70) sepia(0.22)', // lv4: 枯れ気味
+      ],
+    };
+
+    /* 暗幕オーバーレイ（各画面の雰囲気調整） */
+    const TINT = {
+      home:   'rgba(255,255,255,0)',
+      input:  'rgba(0,12,6,0.52)',
+      result: [
+        'rgba(0,22,10,0.14)',   // lv1
+        'rgba(0,18,8,0.24)',    // lv2
+        'rgba(30,30,0,0.34)',   // lv3
+        'rgba(50,22,0,0.50)',   // lv4
+      ],
+    };
+
+    const App = () => {
+      const [screen,   setScreen]   = useState('home');
+      // lifeType は HomeScreen 内部で管理するようになったため App 側では不要
+      const [inputs,   setInputs]   = useState(() => loadInputs() || DEFAULT_INPUTS);
+
+      useEffect(() => { if (screen==='input') saveInputs(inputs); }, [inputs, screen]);
+
+      const handleStart       = d  => { setInputs(d); setScreen('input'); };
+      const handleResult      = ni => { setInputs(ni); saveInputs(ni); setScreen('result'); };
+      const handleBackToInput = ()  => setScreen('input');
+      const handleBackToHome  = ()  => setScreen('home');
+
+      /* 現在のレベル（inputとresultで使用） */
+      const activeLevel = useMemo(() => {
+        if (screen==='home') return 1;
+        return calcMVP(inputs).level;
+      }, [screen, inputs]);
+
+      const bgFilter = screen==='result'
+        ? (BG_FILTER.result[activeLevel-1] || BG_FILTER.result[0])
+        : BG_FILTER[screen];
+
+      const tintBg = screen==='result'
+        ? (TINT.result[activeLevel-1] || TINT.result[0])
+        : TINT[screen];
+
+      return (
+        <div style={{ width:'100vw', height:'100vh', position:'relative', overflow:'hidden' }}>
+
+          {/* ── 全画面ツリー背景 ── */}
+          <div style={{
+            position:'absolute', top:0, left:0, width:'100%', height:'100%',
+            backgroundImage:"url('/hero-tree2.jpg')",
+            backgroundSize:'cover',
+            backgroundPosition:'center center',
+            backgroundRepeat:'no-repeat',
+            zIndex:0,
+            transition:'filter 0.95s ease',
+            filter:bgFilter,
+          }}/>
+
+          {/* ── 雰囲気オーバーレイ ── */}
+          <div style={{
+            position:'absolute', inset:0,
+            zIndex:1,
+            pointerEvents:'none',
+            transition:'background 0.95s ease',
+            background:tintBg,
+          }}/>
+
+          {/* ── 画面コンテンツ ── */}
+          <div style={{ position:'relative', zIndex:2, width:'100%', height:'100%', overflowY:'auto' }}>
+            {screen==='home'   && <HomeScreen onStart={handleStart}/>}
+            {screen==='input'  && <InputScreen onBack={handleBackToHome} onResult={handleResult} initialInputs={inputs}/>}
+            {screen==='result' && <MVPResultScreen inputs={inputs} onBack={handleBackToInput}/>}
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
