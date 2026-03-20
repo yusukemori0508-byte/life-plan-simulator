@@ -240,8 +240,8 @@ export const HomeScreen = ({ onStart }) => {
             className="hs-cta-btn"
             onClick={() => setShowPicker(true)}
             style={{
-              width:        120,
-              height:       120,
+              width:        90,
+              height:       90,
               borderRadius: '50%',
               border:       '3px solid rgba(255,255,255,0.90)',
               background:   'rgba(255,255,255,0.55)',
@@ -257,7 +257,7 @@ export const HomeScreen = ({ onStart }) => {
             }}
           >
             <span style={{
-              fontSize:    17,
+              fontSize:    14,
               fontWeight:  900,
               color:       '#ffffff',
               letterSpacing: '0.06em',
