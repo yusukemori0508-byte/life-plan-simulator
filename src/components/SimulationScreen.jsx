@@ -13,6 +13,7 @@ import { getEventsForAge, getNextEvent } from '../eventTrigger.js';
 import { CATEGORY_META } from '../eventData.js';
 import { applyGaugeDelta, gaugeToColor, gaugeToGradient, gaugeToStatus } from '../gaugeCalc.js';
 import { runFullSimulation } from '../simulationEngine.js';
+import { getHousingEventOptions, getCarEventOptions } from '../eventOptions.js';
 
 // ─────────────────────────────────────────────────────────────
 // カラー
@@ -390,6 +391,19 @@ export const SimulationScreen = ({ onBack, onFinish }) => {
     [currentAge, profile, triggeredEvents],
   );
 
+  // pendingEvent の choices を動的選択肢で上書き（住宅・車のみ）
+  // 固定価格テンプレートではなく profileData の想定価格を基準に生成する
+  const effectiveEvent = React.useMemo(() => {
+    if (!pendingEvent) return null;
+    if (pendingEvent.id === 'housing') {
+      return { ...pendingEvent, choices: getHousingEventOptions(profileData) };
+    }
+    if (pendingEvent.id.startsWith('car_')) {
+      return { ...pendingEvent, choices: getCarEventOptions(profileData) };
+    }
+    return pendingEvent;
+  }, [pendingEvent, profileData]);
+
   // 現在資産（シミュレーションから計算）
   const simRows = React.useMemo(() => {
     try {
@@ -456,11 +470,12 @@ export const SimulationScreen = ({ onBack, onFinish }) => {
     const dampedDelta = getDampedDelta(choice.gaugeDelta, pendingEvent.id, selectedChoices);
 
     actions.selectChoice({
-      eventId:    pendingEvent.id,
-      choiceId:   choice.id,
-      label:      choice.label,
-      gaugeDelta: choice.gaugeDelta,   // raw 保存（シミュレーションエンジン参照用）
-      age:        choiceAge,
+      eventId:       pendingEvent.id,
+      choiceId:      choice.id,
+      label:         choice.label,
+      gaugeDelta:    choice.gaugeDelta,    // raw 保存（シミュレーションエンジン参照用）
+      selectedPrice: choice.selectedPrice ?? null, // 住宅・車の動的選択価格
+      age:           choiceAge,
     });
 
     actions.deltaGauge(dampedDelta);   // 減衰済みデルタでゲージを更新
@@ -706,9 +721,9 @@ export const SimulationScreen = ({ onBack, onFinish }) => {
       </div>
 
       {/* ── イベントカードモーダル ─────────────────────────────── */}
-      {pendingEvent && (
+      {effectiveEvent && (
         <EventCard
-          event={pendingEvent}
+          event={effectiveEvent}
           currentGauge={currentGauge}
           onSelect={handleSelect}
         />

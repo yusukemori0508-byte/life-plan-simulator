@@ -75,17 +75,22 @@ export const profileToSimForm = (profile, selectedChoices = []) => {
 
     // ── 住宅 ────────────────────────────────────────────────
     if (eventId === 'housing') {
-      if (choiceId === 'expensive') {
-        housingType = 'future_purchase';
-        // プロフィールに housingPurchaseAge が設定済み（InputScreen で価格入力済み）の
-        // 場合は profile.propertyPrice を優先。未設定なら選択肢の固定価格を使う。
-        // → これによりシナリオ比較での propertyPrice diff が正しく反映される。
-        if (!p.housingPurchaseAge) propertyPrice = 7000;
-      } else if (choiceId === 'mid') {
-        housingType = 'future_purchase';
-        if (!p.housingPurchaseAge) propertyPrice = 4500;
-      } else if (choiceId === 'skip') {
+      if (choiceId === 'skip' || choiceId === 'rent') {
         housingType = 'rent';
+      } else {
+        // 購入系選択肢（high / base / low / expensive / mid すべて）
+        housingType = 'future_purchase';
+        if (choice.selectedPrice != null && choice.selectedPrice > 0) {
+          // 動的選択肢: EventCard で生成された selectedPrice をそのまま使用
+          propertyPrice = choice.selectedPrice;
+        } else if (choiceId === 'expensive') {
+          // 旧互換: 固定価格テンプレート
+          if (!p.housingPurchaseAge) propertyPrice = 7000;
+        } else if (choiceId === 'mid') {
+          // 旧互換: 固定価格テンプレート
+          if (!p.housingPurchaseAge) propertyPrice = 4500;
+        }
+        // choiceId が high/base/low で selectedPrice が null の場合はプロフィール値を維持
       }
     }
 
@@ -102,12 +107,19 @@ export const profileToSimForm = (profile, selectedChoices = []) => {
 
     // ── 車購入（eventId は car_<age> 形式） ─────────────────
     if (eventId.startsWith('car_')) {
-      const carCost = choiceId === 'new' ? 400 : choiceId === 'used' ? 150 : 0;
+      let carCost = 0;
+      if (choice.selectedPrice != null && choice.selectedPrice > 0) {
+        // 動的選択肢: EventCard で生成された selectedPrice をそのまま使用
+        carCost = choice.selectedPrice;
+      } else {
+        // 旧互換: 固定価格テンプレート
+        carCost = choiceId === 'new' ? 400 : choiceId === 'used' ? 150 : 0;
+      }
       if (carCost > 0) {
         extraLifeEvents.push({
           id:    `car_choice_${choiceAge}`,
           age:   choiceAge ?? p.currentAge,
-          label: `車購入（${choiceId === 'new' ? '新車' : '中古'}）`,
+          label: `車購入（${choice.label ?? choiceId}）`,
           cost:  carCost,
           icon:  '🚗',
         });
