@@ -1,7 +1,7 @@
 // src/components/ActionPage.jsx
-// お金改善アクションページ
-// ─ 診断結果に応じて次の行動候補を信頼感あるカード形式で表示する
-// ─ 特定の商品を断定推奨せず、「次のステップ候補」として情報提供
+// 別パターン比較ページ
+// ─ 診断結果をベースに、条件を変えた場合のパターンを中立的に案内する
+// ─ 「改善を促す」ではなく「別の選択肢を自分で確認できる」情報提供にとどめる
 
 import React from 'react';
 
@@ -14,10 +14,10 @@ const ACTION_CARDS = [
   {
     id:       'fp',
     icon:     '🏦',
-    category: 'ファイナンシャルプランナー',
-    title:    '住宅購入や教育費を整理するには',
-    body:     '住宅購入、教育費、借入の重なり方を専門家に整理してもらうことで、家計に合った判断がしやすくなる場合があります。',
-    btnLabel: '無料で相談する',
+    category: 'プランの前提を確認する',
+    title:    '住宅・教育費の想定をFPと確認したい場合',
+    body:     '住宅価格・頭金・教育費の組み合わせが家計にどう影響するか、専門家の視点で確認できます。シミュレーションの前提整理に活用できます。',
+    btnLabel: 'FPに相談してみる',
     href:     'https://example.com/fp',   // ← 後でURLを差し替えてください
     accentColor: '#2563eb',
     accentBg:    '#eff6ff',
@@ -27,10 +27,10 @@ const ACTION_CARDS = [
   {
     id:       'insurance',
     icon:     '🛡️',
-    category: '保険の見直し',
-    title:    '教育費・住宅リスクに備えるには',
-    body:     '住宅購入や子どもの予定がある場合は、保障内容を見直すことで家計の不安を減らせる場合があります。',
-    btnLabel: '無料相談する',
+    category: 'リスクのカバー状況を確認する',
+    title:    '保障内容を別パターンで確認したい場合',
+    body:     '住宅購入や子どもの予定がある場合、現在の保障と家計のバランスを確認する選択肢のひとつです。',
+    btnLabel: '保障内容を確認する',
     href:     'https://example.com/insurance',   // ← 後でURLを差し替えてください
     accentColor: '#0d9488',
     accentBg:    '#f0fdfa',
@@ -40,10 +40,10 @@ const ACTION_CARDS = [
   {
     id:       'invest',
     icon:     '📈',
-    category: '資産形成',
-    title:    '将来資産を育てるには',
-    body:     '家計に無理のない範囲で積立を始めると、将来資産の改善につながる可能性があります。',
-    btnLabel: '投資を始める',
+    category: '積立パターンを比較する',
+    title:    '積立額を変えた場合の違いを確認したい場合',
+    body:     '毎月の積立額を少し変えると、退職時の資産にどう影響するかをシミュレーターの入力から試せます。',
+    btnLabel: '積立パターンを試す',
     href:     'https://example.com/invest',   // ← 後でURLを差し替えてください
     accentColor: '#16a34a',
     accentBg:    '#f0fdf4',
@@ -53,7 +53,7 @@ const ACTION_CARDS = [
   // ── ここから将来カードを追加できます ──
   // { id: 'nisa', icon: '💹', category: 'NISA活用', title: '...', ... },
   // { id: 'loan', icon: '🏠', category: '住宅ローン比較', title: '...', ... },
-  // { id: 'edu',  icon: '🎓', category: '教育費対策', title: '...', ... },
+  // { id: 'edu',  icon: '🎓', category: '教育費パターン確認', title: '...', ... },
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -206,10 +206,10 @@ export const ActionPage = ({ profileData, result, onBack }) => {
         </button>
         <div>
           <div style={{ fontSize: 14, fontWeight: 800, color: '#14532d', letterSpacing: '0.02em' }}>
-            未来を良くするアクション
+            別パターンで比較する
           </div>
           <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1 }}>
-            診断結果に合わせた次のステップ候補
+            条件を変えた場合の違いを確認できます
           </div>
         </div>
       </div>
@@ -233,7 +233,7 @@ export const ActionPage = ({ profileData, result, onBack }) => {
           </div>
           <div>
             <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
-              あなたの家計安全度スコア
+              現在の試算における家計安全度
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
               <span style={{
@@ -263,7 +263,7 @@ export const ActionPage = ({ profileData, result, onBack }) => {
         {visibleCards.length > 0 ? (
           <>
             <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 14, letterSpacing: '0.04em' }}>
-              あなたの診断結果に関連する情報
+              今回の試算結果をもとに確認できるパターン
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {visibleCards.map(card => (
@@ -280,12 +280,12 @@ export const ActionPage = ({ profileData, result, onBack }) => {
             textAlign:    'center',
             boxShadow:    '0 2px 10px rgba(0,0,0,0.06)',
           }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>🌿</div>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>📊</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#14532d', marginBottom: 8 }}>
-              現在の家計は安定しています
+              現在の条件では安定した試算です
             </div>
             <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.75 }}>
-              今後ライフイベントが増えたときに<br />再度ご確認ください。
+              住宅・車・教育費など条件を変えた場合は<br />「条件を変えて再試算」から確認できます。
             </div>
           </div>
         )}
@@ -306,7 +306,7 @@ export const ActionPage = ({ profileData, result, onBack }) => {
             cursor:       'pointer',
           }}
         >
-          ← 診断結果に戻る
+          ← 結果画面に戻る
         </button>
 
         {/* 免責・注意書き */}
@@ -318,9 +318,9 @@ export const ActionPage = ({ profileData, result, onBack }) => {
           border:     '1px solid #e5e7eb',
         }}>
           <div style={{ fontSize: 10, color: '#9ca3af', lineHeight: 1.85 }}>
-            ※ このページは情報提供を目的としており、特定の金融商品・サービスを推奨するものではありません。<br />
-            ※ 表示される情報はシミュレーション結果に基づく参考情報です。<br />
-            ※ 資産運用・保険・住宅購入の最終的な判断は、ご自身の責任において行ってください。
+            ※ このページは参考情報の案内を目的としており、特定の金融商品・サービスを推奨するものではありません。<br />
+            ※ 表示される内容はシミュレーション結果にもとづく参考例です。<br />
+            ※ 住宅購入・資産運用・保険の選択はご自身の状況に合わせてご判断ください。
           </div>
         </div>
 
