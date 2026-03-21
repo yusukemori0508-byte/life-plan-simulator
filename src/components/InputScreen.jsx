@@ -1406,14 +1406,29 @@ export const InputScreen = ({ onBack, onNext }) => {
 
         {/* 説明文 */}
         <div style={{
+          fontSize: 13, color: C.text, fontWeight: 600,
+          lineHeight: 1.65, marginBottom: 6, paddingLeft: 2,
+        }}>
+          ライフプラン入力
+        </div>
+        <div style={{
           fontSize: 12, color: C.textMuted, fontWeight: 500,
-          lineHeight: 1.6, marginBottom: 12, paddingLeft: 2,
+          lineHeight: 1.6, marginBottom: 14, paddingLeft: 2,
         }}>
           住宅購入・教育費・老後まで、あなたの家計が耐えられるかを確認します。
         </div>
 
-        {/* ミニゲージ */}
-        <MiniGauge gauge={gaugeResult.gauge} message={gaugeResult.message} />
+        {/* 軽い案内（スコアは入力後に表示） */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 7,
+          fontSize: 11, color: C.textMuted, fontWeight: 500,
+          background: '#f8fafc', borderRadius: 10,
+          padding: '8px 14px', marginBottom: 14,
+          border: `1px solid ${C.border}`,
+        }}>
+          <span style={{ fontSize: 13 }}>📊</span>
+          <span>収入・支出を入力すると、家計安全度が自動で更新されます</span>
+        </div>
 
         {/* ══ セクション① 基本情報 ═══════════════════════════════ */}
         <div style={S.section}>
@@ -1550,6 +1565,78 @@ export const InputScreen = ({ onBack, onNext }) => {
           <ExpenseDetailAccordion form={form} setForm={setForm} />
         </div>
 
+        {/* ── 家計安全度チェック（基本情報・収入・支出入力後に表示） ── */}
+        {(() => {
+          const g     = gaugeResult;
+          const score = g.adjustedGauge ?? g.gauge;
+          const col   = score >= 80 ? C.green : score >= 60 ? '#65a30d' : score >= 40 ? C.amber : C.red;
+          const hasCorrBrk = g.baseGauge != null && g.baseGauge !== score && (g.corrections?.length ?? 0) > 0;
+          return (
+            <div style={{
+              background: C.white, borderRadius: 16,
+              padding: '16px 18px', marginBottom: 12,
+              border: `1.5px solid ${col}28`,
+              boxShadow: `0 2px 10px ${col}12`,
+            }}>
+              {/* ヘッダー行 */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: '0.08em', marginBottom: 6 }}>
+                    現在の家計安全度
+                  </div>
+                  {/* バー */}
+                  <div style={{ height: 7, background: '#f0f0f0', borderRadius: 99, overflow: 'hidden', marginBottom: 7 }}>
+                    <div style={{
+                      height: '100%', width: `${score}%`, borderRadius: 99, background: col,
+                      transition: 'width 0.55s cubic-bezier(0.34,1.2,0.64,1)',
+                    }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: col, fontWeight: 600, lineHeight: 1.5 }}>{g.message}</div>
+                </div>
+                {/* スコア + バッジ */}
+                <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                  <div style={{ fontSize: 36, fontWeight: 900, color: col, lineHeight: 1 }}>{score}</div>
+                  <div style={{
+                    fontSize: 10, fontWeight: 700, marginTop: 4,
+                    padding: '2px 9px', borderRadius: 999,
+                    background: g.status?.bg ?? '#f0fdf4',
+                    color: g.status?.color ?? col,
+                    border: `1px solid ${col}30`,
+                  }}>
+                    {g.status?.label}
+                  </div>
+                </div>
+              </div>
+
+              {/* 補正ブレイクダウン（ある場合のみ） */}
+              {hasCorrBrk && (
+                <div style={{
+                  marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}`,
+                  display: 'flex', flexWrap: 'wrap', gap: 6,
+                }}>
+                  <span style={{ fontSize: 10, color: C.textMuted, width: '100%', marginBottom: 2 }}>
+                    ベース {g.baseGauge} → 補正後 {score}（−{g.dampedTotal}点）
+                  </span>
+                  {g.corrections.map(c => (
+                    <span key={c.key} style={{
+                      fontSize: 10, padding: '2px 8px', borderRadius: 999,
+                      background: '#fff7ed', color: '#92400e',
+                      border: '1px solid #fde68a',
+                    }}>
+                      {c.icon} {c.label} −{c.pts}点
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* フッターノート */}
+              <div style={{ fontSize: 10, color: C.textMuted, marginTop: 8 }}>
+                ✏️ 収入・支出・住宅計画の入力値をもとに自動計算されます
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ══ セクション④ 資産 ════════════════════════════════════ */}
         <div style={S.section}>
           <div style={S.sectionTitle}>📈 資産・投資</div>
@@ -1598,20 +1685,6 @@ export const InputScreen = ({ onBack, onNext }) => {
           <HousingSection form={form} setForm={setForm} currentAge={currentAge} />
         </div>
 
-        {/* ── 余裕度コメント ── */}
-        <div style={{
-          background: gaugeResult.gauge >= 60 ? C.greenBg : gaugeResult.gauge >= 40 ? '#fffbeb' : '#fef2f2',
-          border: `1px solid ${gaugeResult.color}30`, borderRadius: 14,
-          padding: '12px 16px', marginBottom: 8,
-          fontSize: 13, color: gaugeResult.color, fontWeight: 600, textAlign: 'center',
-        }}>
-          {gaugeResult.message}
-          {gaugeResult.surplusRatePct !== undefined && (
-            <span style={{ marginLeft: 8, fontSize: 11, opacity: 0.8 }}>
-              （余剰率 {gaugeResult.surplusRatePct}%）
-            </span>
-          )}
-        </div>
 
       </div>
 
