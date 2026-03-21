@@ -173,12 +173,12 @@ export const profileToSimForm = (profile, selectedChoices = []) => {
   }
 
   // ── 住居費パラメータ ────────────────────────────────────────
-  // ユーザー入力の頭金を優先、未設定なら物件価格の10%、貯蓄上限を超えないようキャップ
+  // 頭金はユーザー入力値をそのまま使う。
+  // currentSavings でキャップすると「購入まで数年貯める」ユーザーの頭金が
+  // 今の貯蓄に制限されてしまい、シナリオ比較（頭金+500万）でも差が出なくなる。
+  // 購入時に資金が足りない場合は simulation 内で cash < 0 → 資産取崩しで自然に反映される。
   const downPayment = housingType !== 'rent'
-    ? Math.min(
-        safeNum(p.downPayment, Math.round(propertyPrice * HOUSING_DEFAULTS.downPayRatio)),
-        Math.max(0, currentSavings),               // 貯蓄を超えない
-      )
+    ? Math.max(0, safeNum(p.downPayment, Math.round(propertyPrice * HOUSING_DEFAULTS.downPayRatio)))
     : 0;
 
   const hasSpouse        = p.lifeType !== 'single' && safeNum(p.spouseIncome, 0) > 0;
@@ -832,9 +832,14 @@ export const calcHousingDetail = (rows, profileData) => {
 
   // ── ローン詳細計算 ────────────────────────────────────────
   const propertyPriceVal = safeNum(profileData.propertyPrice, 3500);
+  // 頭金の上限は「購入年の前年末時点の総資産」を上限とする。
+  // currentSavings でキャップすると将来貯める予定の頭金が反映されなくなる。
+  // 購入年の rows は頭金支払い後なので前年の行を参照する。
+  const prePurchaseRow   = rows.find((r) => r.age === purchaseAge - 1);
+  const assetsBeforePurchase = prePurchaseRow?.totalAssets ?? savings;
   const downPaymentVal   = Math.min(
-    safeNum(profileData.downPayment, Math.round(propertyPriceVal * 0.10)),
-    Math.max(0, savings),
+    Math.max(0, safeNum(profileData.downPayment, Math.round(propertyPriceVal * 0.10))),
+    Math.max(0, assetsBeforePurchase),  // 購入前年の資産を上限に
   );
   const loanAmount       = Math.max(0, propertyPriceVal - downPaymentVal);
   const mortgageRateVal  = safeNum(profileData.mortgageRate, HOUSING_DEFAULTS.mortgageRate);
@@ -861,11 +866,10 @@ export const calcHousingDetail = (rows, profileData) => {
     ? Math.min(...post5Rows.map((r) => r.totalAssets))
     : null;
 
-  // ③ 頭金余力（現在貯蓄 vs 物件価格の10%）
-  // 旧式: totalIncome*0.20 は低年収者に過度に緩い基準だったため物件価格ベースに修正
+  // ③ 頭金余力（購入前年の資産 vs 物件価格の10%）
   const downPaymentTarget    = Math.round(propertyPriceVal * 0.10);
-  const hasDownPayment       = savings >= downPaymentTarget;
-  const downPaymentShortfall = hasDownPayment ? 0 : downPaymentTarget - savings;
+  const hasDownPayment       = assetsBeforePurchase >= downPaymentTarget;
+  const downPaymentShortfall = hasDownPayment ? 0 : downPaymentTarget - assetsBeforePurchase;
 
   // ④ 子ども予定と住宅購入の近接（将来出産予定のみ・±3年以内）
   const nearbyChildren = [];
