@@ -111,7 +111,7 @@ const fmtV = (v, key) => {
 
 // ── 指標定義 ──────────────────────────────────────────────────
 const METRICS = [
-  { key: 'gauge',          label: '生活安全度',    higherBetter: true,  showDiff: true  },
+  { key: 'gauge',          label: '家計安全度',    higherBetter: true,  showDiff: true  },
   { key: 'housingJudge',   label: '住宅購入判定',  higherBetter: null,  showDiff: false },
   { key: 'savingsAtPurch', label: '購入年末残高',  higherBetter: true,  showDiff: true  },
   { key: 'minAssetPost5',  label: '購入後5年最低', higherBetter: true,  showDiff: true  },
@@ -150,15 +150,15 @@ const buildSummaryItems = (base, alt) => {
   if (aj > bj) items.push({ type: 'good', text: `住宅購入判定が「${alt.housingJudge?.label}」に改善` });
   else if (aj < bj) items.push({ type: 'bad', text: `住宅購入判定が「${alt.housingJudge?.label}」に悪化` });
 
-  // 生活安全度
+  // 家計安全度
   const gaugeDiff = (alt.gauge ?? 0) - (base.gauge ?? 0);
   if (Math.abs(gaugeDiff) >= 3) {
     items.push({
       type: gaugeDiff > 0 ? 'good' : 'bad',
-      text: `生活安全度 ${gaugeDiff > 0 ? '+' : ''}${gaugeDiff}点`,
+      text: `家計安全度 ${gaugeDiff > 0 ? '+' : ''}${gaugeDiff}点`,
     });
   } else {
-    items.push({ type: 'neutral', text: '生活安全度は同水準' });
+    items.push({ type: 'neutral', text: '家計安全度は同水準' });
     if (housingImproved) {
       items.push({ type: 'neutral', text: '住宅購入後の余力が改善' });
     }

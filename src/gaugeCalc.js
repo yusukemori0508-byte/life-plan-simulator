@@ -186,6 +186,134 @@ const calcHousingPenalty = (profile) => {
  *   housingRiskReasons: string[]
  * }}
  */
+// ─────────────────────────────────────────────────────────────
+// 住宅ローン月返済の簡易計算（gaugeCalc 内専用）
+// ─────────────────────────────────────────────────────────────
+const _estMonthlyPayment = (loan, annualRatePct, termYears) => {
+  if (loan <= 0 || termYears <= 0) return 0;
+  const r = annualRatePct / 100 / 12;
+  if (r === 0) return loan / (termYears * 12);
+  const n = termYears * 12;
+  return loan * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+};
+
+// ─────────────────────────────────────────────────────────────
+// 家計安全度スコアの補正内訳を計算
+//
+// 返り値:
+//   corrections = [{ key, label, icon, pts, items[] }]
+//   dampedTotal = 減衰後の合計補正点
+// ─────────────────────────────────────────────────────────────
+export const calcScoreCorrections = (profile) => {
+  const selfInc   = Number(profile.selfIncome   ?? 0);
+  const spouseInc = Number(profile.spouseIncome ?? 0);
+  const totalNet  = (selfInc   > 0 ? selfInc   * calcNetRatio(selfInc)   : 0)
+                  + (spouseInc > 0 ? spouseInc * calcNetRatio(spouseInc) : 0);
+  const monthlyNet = totalNet / 12;
+  const currentAge = Number(profile.currentAge ?? 30);
+  const savings    = Number(profile.currentSavings ?? 0);
+  const existingLoans = Array.isArray(profile.existingLoans) ? profile.existingLoans : [];
+
+  // ① 住宅購入補正（max 15点）
+  let housingPts = 0;
+  const housingItems = [];
+  const purchaseAge = Number(profile.housingPurchaseAge ?? 0);
+  if (purchaseAge > currentAge) {
+    const yearsUntil = purchaseAge - currentAge;
+    const propPrice  = Number(profile.propertyPrice ?? 3500);
+    const downPay    = Number(profile.downPayment   ?? Math.round(propPrice * 0.10));
+    const loan       = Math.max(0, propPrice - downPay);
+    const mp         = _estMonthlyPayment(loan, Number(profile.mortgageRate ?? 1.5), Number(profile.mortgageTerm ?? 35));
+    const burden     = monthlyNet > 0 ? (mp / monthlyNet * 100) : 0;
+
+    // 近接リスク（購入が迫っているほど高リスク）
+    if (yearsUntil <= 2) {
+      housingPts += 6; housingItems.push(`購入まで${yearsUntil}年と近い`);
+    } else if (yearsUntil <= 5) {
+      housingPts += 3; housingItems.push(`購入まで${yearsUntil}年`);
+    }
+    // 返済負担率
+    if (burden > 30) {
+      housingPts += 5; housingItems.push(`返済負担率 ${Math.round(burden)}%（目安25%超）`);
+    } else if (burden > 20) {
+      housingPts += 2; housingItems.push(`返済負担率 ${Math.round(burden)}%（やや高め）`);
+    }
+    // 頭金不足
+    if (savings < propPrice * 0.10) {
+      housingPts += 3; housingItems.push('頭金の準備が不足');
+    }
+    // 育児費との重複
+    const childAges = profile.childAges ?? [];
+    if (childAges.some(a => a !== null && Number(a) > currentAge && Math.abs(Number(a) - purchaseAge) <= 3)) {
+      housingPts += 3; housingItems.push('育児費と購入時期が重なる');
+    }
+    // 配偶者復職前
+    const srAge = Number(profile.spouseReturnAge ?? 0);
+    if (srAge > 0 && srAge > purchaseAge && spouseInc === 0) {
+      housingPts += 2; housingItems.push('配偶者が購入時に復職前');
+    }
+  }
+  housingPts = Math.min(housingPts, 15);
+
+  // ② 教育費補正（max 10点）
+  let educationPts = 0;
+  const educationItems = [];
+  const childAgeArr   = profile.childAges ?? [];
+  const futureKids    = childAgeArr.filter(a => a !== null && Number(a) >= currentAge);
+  if (futureKids.length >= 3) {
+    educationPts = 10; educationItems.push(`子ども${futureKids.length}人分の教育費が集中`);
+  } else if (futureKids.length === 2) {
+    educationPts = 6;  educationItems.push('子ども2人分の教育費ピークがある');
+  } else if (futureKids.length === 1) {
+    educationPts = 3;  educationItems.push('教育費のピーク期がある');
+  }
+  educationPts = Math.min(educationPts, 10);
+
+  // ③ 車関連補正（max 5点）
+  let carPts = 0;
+  const carItems = [];
+  if (profile.carPaymentType === 'loan') {
+    carPts += 3; carItems.push('車ローン返済予定');
+  }
+  const carLoans = existingLoans.filter(l => /車|カー|自動車|car/i.test(l.label ?? ''));
+  if (carLoans.length > 0) {
+    const carMonthly = carLoans.reduce((s, l) => s + (Number(l.monthlyPayment) || 0), 0);
+    carPts += carMonthly > 3 ? 3 : 1;
+    carItems.push(`車ローン残 ${Math.round(carMonthly)}万円/月`);
+  }
+  carPts = Math.min(carPts, 5);
+
+  // ④ 既存借入補正（max 8点）
+  let loanPts = 0;
+  const loanItems = [];
+  const totalMonthlyLoan = existingLoans.reduce((s, l) => s + (Number(l.monthlyPayment) || 0), 0);
+  if (monthlyNet > 0 && totalMonthlyLoan > 0) {
+    const loanBurden = totalMonthlyLoan / monthlyNet * 100;
+    if (loanBurden > 20) {
+      loanPts = 8; loanItems.push(`返済負担率 ${Math.round(loanBurden)}%（高い）`);
+    } else if (loanBurden > 10) {
+      loanPts = 4; loanItems.push(`返済負担率 ${Math.round(loanBurden)}%`);
+    } else {
+      loanPts = 2; loanItems.push(`既存借入を返済中`);
+    }
+  }
+  loanPts = Math.min(loanPts, 8);
+
+  const rawTotal = housingPts + educationPts + carPts + loanPts;
+  // 複数補正が重なる場合の減衰（重いほど減衰が大きい）
+  const dampFactor = rawTotal > 20 ? 0.78 : rawTotal > 14 ? 0.88 : 1.0;
+  const dampedTotal = Math.round(rawTotal * dampFactor);
+
+  const corrections = [
+    { key: 'housing',   label: '住宅購入補正', icon: '🏠', pts: housingPts,   items: housingItems   },
+    { key: 'education', label: '教育費補正',   icon: '🎓', pts: educationPts, items: educationItems },
+    { key: 'car',       label: '車関連補正',   icon: '🚗', pts: carPts,       items: carItems       },
+    { key: 'loan',      label: '既存借入補正', icon: '💴', pts: loanPts,      items: loanItems      },
+  ].filter(c => c.pts > 0);
+
+  return { corrections, rawTotal, dampedTotal };
+};
+
 export const calcInitialGauge = (profile) => {
   const selfInc   = Number(profile.selfIncome       ?? 0);
   const spouseInc = Number(profile.spouseIncome      ?? 0);
@@ -198,43 +326,47 @@ export const calcInitialGauge = (profile) => {
   const totalNetIncome = netSelf + netSpouse;
 
   // 既存借入の月返済合計
-  const existingLoans     = Array.isArray(profile.existingLoans) ? profile.existingLoans : [];
-  const monthlyLoanRepay  = existingLoans.reduce((sum, l) => sum + (Number(l.monthlyPayment) || 0), 0);
+  const existingLoans    = Array.isArray(profile.existingLoans) ? profile.existingLoans : [];
+  const monthlyLoanRepay = existingLoans.reduce((sum, l) => sum + (Number(l.monthlyPayment) || 0), 0);
 
   // 支出は手取りベースで評価（臨時支出バッファ + 既存借入を加算）
-  const annualExpense     = (expense + MONTHLY_BUFFER + monthlyLoanRepay) * 12;
-  const annualInvestment  = invest * 12;
-  const surplus           = totalNetIncome - annualExpense - annualInvestment;
+  const annualExpense    = (expense + MONTHLY_BUFFER + monthlyLoanRepay) * 12;
+  const annualInvestment = invest * 12;
+  const surplus          = totalNetIncome - annualExpense - annualInvestment;
 
   // 手取り年収ゼロ対策（surplusRate は手取り年収ベース）
-  const surplusRate = totalNetIncome > 0
-    ? surplus / totalNetIncome
-    : -1;
+  const surplusRate = totalNetIncome > 0 ? surplus / totalNetIncome : -1;
 
-  // テーブル参照でゲージ変換
-  let baseGauge = 8;
+  // ── ベーススコア（余剰率のみ、補正なし） ──────────────────
+  let cfBaseGauge = 8;
   for (const row of SURPLUS_TO_GAUGE) {
-    if (surplusRate >= row.minRate) {
-      baseGauge = row.gauge;
-      break;
-    }
+    if (surplusRate >= row.minRate) { cfBaseGauge = row.gauge; break; }
   }
 
-  // 住宅安全補正（減点）
-  const { penalty, reasons } = calcHousingPenalty(profile);
-  const gauge = Math.max(0, Math.min(100, baseGauge - penalty));
+  // ── 各種補正（住宅・教育費・車・借入）──────────────────────
+  const { corrections, dampedTotal } = calcScoreCorrections(profile);
+
+  // ── イベント反映後スコア（減衰済み補正を適用） ────────────
+  const adjustedGauge = Math.max(0, Math.min(100, cfBaseGauge - dampedTotal));
+
+  // ── 後方互換フィールド ──────────────────────────────────────
+  const housingCorr = corrections.find(c => c.key === 'housing');
 
   return {
-    gauge,
-    surplus:             Math.round(surplus),
-    surplusRatePct:      Math.round(surplusRate * 1000) / 10,
-    message:             gaugeToMessage(gauge),
-    color:               gaugeToColor(gauge),
-    gradient:            gaugeToGradient(gauge),
-    treeLevel:           gaugeToTreeLevel(gauge),
-    status:              gaugeToStatus(gauge),
-    housingPenalty:      penalty,
-    housingRiskReasons:  reasons,
+    gauge:              adjustedGauge,            // 後方互換（調整後を返す）
+    baseGauge:          cfBaseGauge,              // ベーススコア（補正前）
+    adjustedGauge,                                // イベント反映後スコア
+    corrections,                                  // 補正ブレイクダウン配列
+    dampedTotal,                                  // 合計補正点（減衰済み）
+    surplus:            Math.round(surplus),
+    surplusRatePct:     Math.round(surplusRate * 1000) / 10,
+    message:            gaugeToMessage(adjustedGauge),
+    color:              gaugeToColor(adjustedGauge),
+    gradient:           gaugeToGradient(adjustedGauge),
+    treeLevel:          gaugeToTreeLevel(adjustedGauge),
+    status:             gaugeToStatus(adjustedGauge),
+    housingPenalty:     dampedTotal,              // 後方互換
+    housingRiskReasons: housingCorr?.items ?? [], // 後方互換
   };
 };
 

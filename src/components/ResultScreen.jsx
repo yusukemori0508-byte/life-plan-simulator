@@ -62,7 +62,7 @@ const fmtAssetAbs = (n) => {
 const GaugeBar = ({ gauge, color, gradient }) => (
   <div style={{ width: '100%' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-      <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: '0.06em' }}>生活安全度</span>
+      <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: '0.06em' }}>家計安全度</span>
       <span style={{ fontSize: 28, fontWeight: 900, color, lineHeight: 1 }}>{gauge}</span>
     </div>
     <div style={{
@@ -182,76 +182,130 @@ export const ResultScreen = ({ onBack, onRestart }) => {
       <div style={{ padding: '16px', maxWidth: 480, margin: '0 auto' }}>
 
         {/* ────────────────────────────────────────────────────── */}
-        {/* ヒーロー: 安全判定スコア                              */}
+        {/* ヒーロー: 家計安全度（2層構造）                        */}
         {/* ────────────────────────────────────────────────────── */}
         <div
           className="rs-card"
           style={{
-            background:    `linear-gradient(145deg, ${color}14, ${color}06)`,
-            borderRadius:  24,
-            padding:       '28px 24px 24px',
-            marginBottom:  14,
-            border:        `1.5px solid ${color}40`,
-            textAlign:     'center',
-            animationDelay:'0.05s',
-            opacity:       revealed ? 1 : 0,
-            transition:    'opacity 0.5s ease',
+            background:     `linear-gradient(145deg, ${color}14, ${color}06)`,
+            borderRadius:   24,
+            padding:        '24px 20px 20px',
+            marginBottom:   14,
+            border:         `1.5px solid ${color}40`,
+            animationDelay: '0.05s',
+            opacity:        revealed ? 1 : 0,
+            transition:     'opacity 0.5s ease',
           }}
         >
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: '0.10em', marginBottom: 10 }}>
-            現在の家計安全度
-          </div>
-          <div style={{ fontSize: 72, fontWeight: 900, color, lineHeight: 1, marginBottom: 10 }}>
-            {s.gauge}
-          </div>
-          <div style={{
-            display:      'inline-block',
-            padding:      '5px 18px', borderRadius: 999,
-            background:   s.status.bg, color: s.status.color,
-            fontSize:     14, fontWeight: 800, letterSpacing: '0.04em',
-            border:       `1.5px solid ${s.status.color}40`,
-            marginBottom: 12,
-          }}>
-            {s.status.label}
-          </div>
-          <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.7, maxWidth: 280, margin: '0 auto' }}>
-            {s.message}
+          {/* タイトル */}
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: '0.10em', marginBottom: 14, textAlign: 'center' }}>
+            家計安全度レポート
           </div>
 
-          {/* ゲージと破綻判定の矛盾メモ（ゲージは現状収支ベース、シミュレーションは住宅ローン込み全期間） */}
-          {s.gauge >= 30 && s.isCollapsed && (
-            <div style={{
-              marginTop:    10,
-              padding:      '7px 14px',
-              borderRadius: 10,
-              background:   C.redBg,
-              border:       `1px solid ${C.red}40`,
-              fontSize:     11,
-              color:        C.redDark,
-              fontWeight:   600,
-            }}>
-              ⚠️ ゲージは現状収支のスコアです。下の「資金ショート判定」も必ず確認してください
+          {/* 2層スコア表示 */}
+          {s.baseGauge != null && s.baseGauge !== s.adjustedGauge ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 16 }}>
+              {/* ベーススコア */}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: C.textMuted, marginBottom: 4, letterSpacing: '0.06em' }}>
+                  収支ベース
+                </div>
+                <div style={{ fontSize: 52, fontWeight: 900, color: gaugeToColor(s.baseGauge), lineHeight: 1 }}>
+                  {s.baseGauge}
+                </div>
+              </div>
+              {/* 矢印 */}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 2 }}>補正</div>
+                <div style={{ fontSize: 18, color: '#ef4444' }}>→</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#ef4444' }}>
+                  −{s.dampedTotal}
+                </div>
+              </div>
+              {/* イベント反映後スコア */}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: C.textMuted, marginBottom: 4, letterSpacing: '0.06em' }}>
+                  イベント反映後
+                </div>
+                <div style={{ fontSize: 52, fontWeight: 900, color, lineHeight: 1 }}>
+                  {s.adjustedGauge ?? s.gauge}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* 補正なし: シンプル表示 */
+            <div style={{ textAlign: 'center', marginBottom: 14 }}>
+              <div style={{ fontSize: 72, fontWeight: 900, color, lineHeight: 1 }}>
+                {s.gauge}
+              </div>
             </div>
           )}
 
-          {/* ゲージバー */}
-          <div style={{ marginTop: 18 }}>
-            <GaugeBar gauge={s.gauge} color={color} gradient={gradient} />
+          {/* ステータスバッジ + メッセージ */}
+          <div style={{ textAlign: 'center', marginBottom: 14 }}>
+            <div style={{
+              display:      'inline-block',
+              padding:      '4px 16px', borderRadius: 999,
+              background:   s.status.bg, color: s.status.color,
+              fontSize:     13, fontWeight: 800, letterSpacing: '0.04em',
+              border:       `1.5px solid ${s.status.color}40`,
+              marginBottom: 8,
+            }}>
+              {s.status.label}
+            </div>
+            <div style={{ fontSize: 12, color: C.textMuted, lineHeight: 1.7, maxWidth: 280, margin: '0 auto' }}>
+              {s.message}
+            </div>
           </div>
 
-          {/* 住宅減点メモ */}
-          {s.housingPenalty > 0 && (
+          {/* ゲージバー */}
+          <GaugeBar gauge={s.adjustedGauge ?? s.gauge} color={color} gradient={gradient} />
+
+          {/* 補正ブレイクダウン */}
+          {s.corrections && s.corrections.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: '0.06em', marginBottom: 8 }}>
+                スコア低下の要因
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {s.corrections.map((c) => (
+                  <div key={c.key} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 8,
+                    padding: '8px 12px', borderRadius: 10,
+                    background: 'rgba(255,255,255,0.70)',
+                    border: `1px solid ${C.amber}30`,
+                  }}>
+                    <span style={{ fontSize: 13, flexShrink: 0 }}>{c.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#78350f' }}>{c.label}</span>
+                        <span style={{ fontSize: 12, fontWeight: 900, color: '#ef4444' }}>−{c.pts}点</span>
+                      </div>
+                      {c.items.length > 0 && (
+                        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2, lineHeight: 1.5 }}>
+                          {c.items.join('・')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {s.dampedTotal < s.rawTotal && (
+                <div style={{ fontSize: 10, color: C.textMuted, marginTop: 6, textAlign: 'right' }}>
+                  ※複数要因の重複減衰を適用（−{s.rawTotal}点 → −{s.dampedTotal}点）
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 資金ショートがある場合の注記 */}
+          {(s.adjustedGauge ?? s.gauge) >= 30 && s.isCollapsed && (
             <div style={{
-              marginTop:    12,
-              padding:      '7px 12px',
-              borderRadius: 10,
-              background:   C.amberBg,
-              border:       `1px solid ${C.amber}40`,
-              fontSize:     11,
-              color:        '#92400e',
-              fontWeight:   600,
+              marginTop: 12, padding: '7px 14px', borderRadius: 10,
+              background: C.redBg, border: `1px solid ${C.red}40`,
+              fontSize: 11, color: C.redDark, fontWeight: 600,
             }}>
-              住宅購入リスク補正: −{s.housingPenalty}点
+              ⚠️ 上スコアは収支ベースです。下の「資金ショート判定」も必ず確認してください
             </div>
           )}
         </div>
@@ -261,41 +315,29 @@ export const ResultScreen = ({ onBack, onRestart }) => {
         {/* ────────────────────────────────────────────────────── */}
         {s.explanationReasons && s.explanationReasons.length > 0 && (
           <Card className="rs-card" style={{ animationDelay: '0.15s', padding: '16px 18px' }}>
-            <CardLabel>スコアの根拠</CardLabel>
+            <CardLabel>収支の詳細</CardLabel>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               {s.explanationReasons.map((r, i) => {
-                // テキストを "—" で分割して2行構造に
-                const parts = r.text.split(/—|―/);
+                const parts    = r.text.split(/—|―/);
                 const headline = parts[0]?.trim() ?? r.text;
                 const detail   = parts[1]?.trim() ?? null;
-                const isSafe = r.type === 'safe';
+                const isSafe   = r.type === 'safe';
                 return (
                   <div key={i} style={{
-                    display:      'flex',
-                    alignItems:   'flex-start',
-                    gap:          8,
-                    padding:      '8px 12px',
-                    borderRadius: 10,
-                    background:   isSafe ? C.greenBg : C.amberBg,
-                    border:       `1px solid ${isSafe ? C.green + '60' : C.amber + '60'}`,
+                    display: 'flex', alignItems: 'flex-start', gap: 8,
+                    padding: '8px 12px', borderRadius: 10,
+                    background: isSafe ? C.greenBg : C.amberBg,
+                    border: `1px solid ${isSafe ? C.green + '60' : C.amber + '60'}`,
                   }}>
-                    <span style={{
-                      fontSize: 13, flexShrink: 0, marginTop: 2,
-                      color: isSafe ? C.greenDark : '#b45309',
-                    }}>
+                    <span style={{ fontSize: 13, flexShrink: 0, marginTop: 2, color: isSafe ? C.greenDark : '#b45309' }}>
                       {isSafe ? '✓' : '!'}
                     </span>
                     <div>
-                      <div style={{
-                        fontSize: 12, fontWeight: 700, lineHeight: 1.4,
-                        color: isSafe ? C.greenDark : '#78350f',
-                      }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.4, color: isSafe ? C.greenDark : '#78350f' }}>
                         {headline}
                       </div>
                       {detail && (
-                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, lineHeight: 1.4 }}>
-                          {detail}
-                        </div>
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, lineHeight: 1.4 }}>{detail}</div>
                       )}
                     </div>
                   </div>

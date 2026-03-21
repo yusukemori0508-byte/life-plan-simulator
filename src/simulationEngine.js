@@ -975,11 +975,15 @@ export const calcSafetySummary = (simPartial, gaugeResult, form, housingDetail =
   const housingRiskReasons = gaugeResult.housingRiskReasons ?? [];
 
   return {
-    // 生活余裕度
-    gauge:         gaugeResult.gauge,
-    status:        gaugeResult.status,
-    message:       gaugeResult.message,
-    color:         gaugeResult.color,
+    // 家計安全度（2層構造）
+    gauge:          gaugeResult.gauge,          // 後方互換（adjustedGauge と同値）
+    baseGauge:      gaugeResult.baseGauge,      // ベーススコア（補正前）
+    adjustedGauge:  gaugeResult.adjustedGauge,  // イベント反映後スコア
+    corrections:    gaugeResult.corrections,    // 補正ブレイクダウン配列
+    dampedTotal:    gaugeResult.dampedTotal,    // 合計補正点
+    status:         gaugeResult.status,
+    message:        gaugeResult.message,
+    color:          gaugeResult.color,
 
     // 資金ショート
     collapseAge,
@@ -994,7 +998,7 @@ export const calcSafetySummary = (simPartial, gaugeResult, form, housingDetail =
     // 老後資産
     retirementAsset: summary.retirementAsset ?? 0,
 
-    // 住宅購入（ペナルティ概要）
+    // 住宅購入（ペナルティ概要・後方互換）
     housingPenalty,
     housingRiskReasons,
     hasHousingRisk:  housingRiskReasons.length > 0,
