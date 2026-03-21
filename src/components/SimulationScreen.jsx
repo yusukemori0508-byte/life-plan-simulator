@@ -33,6 +33,50 @@ const C = {
 };
 
 // ─────────────────────────────────────────────────────────────
+// getDampedDelta — 同カテゴリ繰り返しイベントの減衰
+//
+// 設計思想:
+//   - シミュレーションエンジンは gaugeDelta を使わない（経済計算は別ロジック）
+//   - 視覚ゲージ専用として、繰り返しイベントの"急落感"を自然に緩和する
+//   - 車買替・教育マイルストーン・2人目以降の子どもに減衰を適用
+//
+// 減衰テーブル: DAMP[category][n] = n回目の適用倍率
+//   car_   : 1→0.55→0.35 (7年ごと買替で4回なら -8,-4,-3,-2)
+//   edu_   : 最初の3イベントは等倍、4〜6は0.65、7以降は0.45
+//   child_ : 1人目等倍、2人目0.65、3人目以降0.45
+// ─────────────────────────────────────────────────────────────
+const DAMP_TABLE = {
+  car_:   [1.00, 0.55, 0.35, 0.25],
+  edu_:   [1.00, 1.00, 1.00, 0.65, 0.65, 0.65, 0.45, 0.45, 0.45, 0.35],
+  child_: [1.00, 0.65, 0.45],
+};
+
+const getDampedDelta = (rawDelta, eventId, priorChoices) => {
+  // プラス・ゼロは減衰なし（転職昇給・副業などは正直に反映）
+  if (rawDelta >= 0) return rawDelta;
+
+  // カテゴリプレフィックス判定
+  const pfx = Object.keys(DAMP_TABLE).find(p => eventId.startsWith(p));
+  if (!pfx) return rawDelta; // 単発イベント（housing/jobChange など）は減衰なし
+
+  // 同カテゴリの「マイナス選択済み回数」を数える
+  const priorNeg = priorChoices.filter(
+    c => c.eventId.startsWith(pfx) && (c.gaugeDelta ?? 0) < 0,
+  ).length;
+
+  const tbl    = DAMP_TABLE[pfx];
+  const factor = tbl[Math.min(priorNeg, tbl.length - 1)];
+  const damped = Math.round(rawDelta * factor);
+
+  // グローバルキャップ: 累積下落が 40点を超えたら追加 0.5 倍
+  // （ベーススコアが低い状態での更なる急落を防ぐ）
+  const totalApplied = priorChoices.reduce((s, c) => s + Math.min(0, c.gaugeDelta ?? 0), 0);
+  if (totalApplied < -40) return Math.round(damped * 0.50);
+
+  return damped;
+};
+
+// ─────────────────────────────────────────────────────────────
 // EventCard — イベント選択モーダル
 // ─────────────────────────────────────────────────────────────
 const EventCard = ({ event, currentGauge, onSelect }) => {
@@ -408,15 +452,18 @@ export const SimulationScreen = ({ onBack, onFinish }) => {
 
     const choiceAge = pendingEvent._queuedAge ?? currentAge;
 
+    // 繰り返しイベントの減衰を適用（視覚ゲージ専用。シミュ計算には影響しない）
+    const dampedDelta = getDampedDelta(choice.gaugeDelta, pendingEvent.id, selectedChoices);
+
     actions.selectChoice({
       eventId:    pendingEvent.id,
       choiceId:   choice.id,
       label:      choice.label,
-      gaugeDelta: choice.gaugeDelta,
+      gaugeDelta: choice.gaugeDelta,   // raw 保存（シミュレーションエンジン参照用）
       age:        choiceAge,
     });
 
-    actions.deltaGauge(choice.gaugeDelta);
+    actions.deltaGauge(dampedDelta);   // 減衰済みデルタでゲージを更新
     actions.triggerEvent(pendingEvent.id);
   };
 
