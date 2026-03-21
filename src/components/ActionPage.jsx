@@ -151,11 +151,16 @@ const ActionCard = ({ card }) => {
 export const ActionPage = ({ profileData, result, onBack }) => {
   const s = result?.safetySummary ?? {};
 
+  // housingType: 明示指定があればそれを使い、なければ housingPurchaseAge から導出
+  const housingType =
+    profileData?.housingType ??
+    (profileData?.housingPurchaseAge ? 'future_purchase' : 'rent');
+
   // 表示条件を判定するコンテキストを構築
   const ctx = {
     gauge:             s.gauge ?? 50,
     isCollapsed:       s.isCollapsed ?? false,
-    hasHousing:        !!profileData?.housingPurchaseAge,
+    hasHousing:        housingType !== 'rent',
     hasChildren:       (profileData?.numChildren ?? 0) > 0,
     hasExistingLoans:  (profileData?.existingLoans ?? []).length > 0,
     monthlyInvestment: profileData?.monthlyInvestment ?? 0,
@@ -228,7 +233,7 @@ export const ActionPage = ({ profileData, result, onBack }) => {
           </div>
           <div>
             <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
-              あなたの生活安全度スコア
+              あなたの家計安全度スコア
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
               <span style={{
