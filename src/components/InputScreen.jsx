@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { useAppStore } from '../store/useAppStore.jsx';
-import { calcInitialGauge } from '../gaugeCalc.js';
+import { calcInitialGauge, calcNetRatio } from '../gaugeCalc.js';
 
 // ─────────────────────────────────────────────────────────────
 // カラー
@@ -35,10 +35,10 @@ const S = {
     border:       `1px solid ${C.border}`,
   },
   sectionTitle: {
-    fontSize:      11,
+    fontSize:      15,
     fontWeight:    800,
     color:         C.textMuted,
-    letterSpacing: '0.10em',
+    letterSpacing: '0.08em',
     textTransform: 'uppercase',
     marginBottom:  16,
     display:       'flex',
@@ -59,7 +59,7 @@ const S = {
     padding:        '10px 0',
   },
   label: {
-    fontSize:   14,
+    fontSize:   15,
     fontWeight: 600,
     color:      C.text,
     flex:       1,
@@ -77,16 +77,44 @@ const S = {
 };
 
 // ─────────────────────────────────────────────────────────────
+// SVG アイコン（絵文字の代替）
+// ─────────────────────────────────────────────────────────────
+const PATHS = {
+  person:   "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z",
+  briefcase:"M10 2h4c1.1 0 2 .9 2 2v2h4c1.1 0 2 .9 2 2v11c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V8c0-1.1.9-2 2-2h4V4c0-1.1.9-2 2-2zm0 2v2h4V4h-4zM4 8v11h16V8H4z",
+  receipt:  "M18 17H6v-2h12v2zm0-4H6v-2h12v2zm0-4H6V7h12v2zM3 22l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20z",
+  trending: "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z",
+  calendar: "M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z",
+  house:    "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z",
+  chart:    "M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z",
+  chevron:  "M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z",
+  card:     "M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v4z",
+  money:    "M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z",
+  group:    "M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z",
+  people3:  "M4 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm.5 2H3c-.83 0-1.5.67-1.5 1.5v1c0 .28.22.5.5.5h4v-1c0-.72.23-1.38.59-1.95-.36-.03-.72-.05-1.09-.05zM12 11c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm1.5 2h-3c-1.1 0-2 .9-2 2v1h7v-1c0-1.1-.9-2-2-2zM20 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm.5 2h-1.5c-.37 0-.73.02-1.09.05.36.57.59 1.23.59 1.95v1h4c.28 0 .5-.22.5-.5v-1c0-.83-.67-1.5-1.5-1.5z",
+  car:      "M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.08 3.11H5.77L6.85 7zM19 17H5v-5h14v5zm-8-4H9v2h2v-2zm4 0h-2v2h2v-2z",
+  school:   "M12 3L1 9l4 2.18V15c0 3.31 4.03 6 8.5 6s8.5-2.69 8.5-6v-3.82L23 9 12 3zm6.5 9.83v.46C18.5 15.36 15.57 17 12 17s-6.5-1.64-6.5-3.71v-.46l6.5 3.55 6.5-3.55zM12 13.45L4.5 9.36 12 5.27l7.5 4.09L12 13.45z",
+  clipboard:"M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z",
+};
+const SvgIcon = ({ name, size = 16, color = C.greenDark }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ flexShrink: 0, display: 'block' }}>
+    <path d={PATHS[name]} />
+  </svg>
+);
+
+// ─────────────────────────────────────────────────────────────
 // NumberStepper — ＋／－ で整数を増減（タップで直接入力可）
 // ─────────────────────────────────────────────────────────────
 const NumberStepper = ({ value, onChange, min = 0, max = 9999, step = 1, format = (v) => v, unit = '' }) => {
   const [editing, setEditing] = React.useState(false);
   const [draft,   setDraft]   = React.useState('');
 
-  const dec = () => onChange(Math.max(min, value - step));
-  const inc = () => onChange(Math.min(max, value + step));
+  const isNull = value === null || value === undefined;
 
-  const startEdit = () => { setDraft(String(value)); setEditing(true); };
+  const dec = () => { if (!isNull) onChange(Math.max(min, value - step)); };
+  const inc = () => onChange(Math.min(max, isNull ? min : value + step));
+
+  const startEdit = () => { setDraft(isNull ? '' : String(value)); setEditing(true); };
   const commitEdit = () => {
     const n = parseInt(draft, 10);
     if (!isNaN(n)) {
@@ -109,11 +137,12 @@ const NumberStepper = ({ value, onChange, min = 0, max = 9999, step = 1, format 
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <button style={btnStyle(value <= min)} onClick={dec} disabled={value <= min}>−</button>
+      <button style={btnStyle(isNull || value <= min)} onClick={dec} disabled={isNull || value <= min}>−</button>
       <div style={{ textAlign: 'center', minWidth: 56 }}>
         {editing ? (
           <input
             type="number" value={draft} min={min} max={max} step={step} autoFocus
+            placeholder={String(min)}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commitEdit}
             onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
@@ -128,16 +157,21 @@ const NumberStepper = ({ value, onChange, min = 0, max = 9999, step = 1, format 
           <button
             onClick={startEdit}
             style={{
-              background: 'none', border: 'none', cursor: 'text', padding: '2px 4px',
-              borderRadius: 6, minWidth: 52,
+              background: isNull ? '#f3f4f6' : 'none',
+              border: isNull ? `1.5px solid #d1d5db` : 'none',
+              cursor: 'pointer', padding: '3px 8px',
+              borderRadius: 8, minWidth: 52,
             }}
           >
-            <span style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{format(value)}</span>
-            {unit && <span style={S.unit}>{unit}</span>}
+            {isNull
+              ? <span style={{ fontSize: 13, fontWeight: 600, color: C.textMuted }}>未入力</span>
+              : <span style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{format(value)}</span>
+            }
+            {!isNull && unit && <span style={S.unit}>{unit}</span>}
           </button>
         )}
       </div>
-      <button style={btnStyle(value >= max)} onClick={inc} disabled={value >= max}>＋</button>
+      <button style={btnStyle(!isNull && value >= max)} onClick={inc} disabled={!isNull && value >= max}>＋</button>
     </div>
   );
 };
@@ -145,18 +179,38 @@ const NumberStepper = ({ value, onChange, min = 0, max = 9999, step = 1, format 
 // ─────────────────────────────────────────────────────────────
 // SliderRow — ラベル + 全幅スライダー + タップ直接入力
 // ─────────────────────────────────────────────────────────────
-const SliderRow = ({ label, sub, value, onChange, min = 0, max = 100, step = 1, format = (v) => v, unit = '', color = C.greenDark, last = false }) => {
+const SliderRow = ({ label, sub, value, onChange, min = 0, max = 100, step = 1, format = (v) => v, unit = '', color = C.greenDark, last = false, hint, yenInput = false }) => {
   const [editing, setEditing] = React.useState(false);
   const [draft,   setDraft]   = React.useState('');
 
-  const startEdit = () => { setDraft(String(value)); setEditing(true); };
+  const isNull = value === null || value === undefined;
+  const displayValue = isNull ? min : value;
+
+  const startEdit = () => {
+    if (yenInput && !isNull) {
+      setDraft(String(Math.round(value * 10000)));
+    } else {
+      setDraft(isNull ? '' : String(value));
+    }
+    setEditing(true);
+  };
   const commitEdit = () => {
-    const n = parseFloat(draft.replace(/,/g, ''));
-    if (!isNaN(n)) {
-      const decimals = String(step).includes('.') ? String(step).split('.')[1].length : 0;
-      const clamped  = Math.max(min, Math.min(max, n));
-      const snapped  = parseFloat((Math.round(clamped / step) * step).toFixed(decimals));
-      onChange(snapped);
+    const raw = draft.replace(/,/g, '');
+    if (yenInput) {
+      const n = parseInt(raw, 10);
+      if (!isNaN(n) && n >= 0) {
+        const inMan = n / 10000;
+        const clamped = Math.max(min, Math.min(max, inMan));
+        onChange(Math.round(clamped * 10000) / 10000);
+      }
+    } else {
+      const n = parseFloat(raw);
+      if (!isNaN(n)) {
+        const decimals = String(step).includes('.') ? String(step).split('.')[1].length : 0;
+        const clamped  = Math.max(min, Math.min(max, n));
+        const snapped  = parseFloat((Math.round(clamped / step) * step).toFixed(decimals));
+        onChange(snapped);
+      }
     }
     setEditing(false);
   };
@@ -171,38 +225,54 @@ const SliderRow = ({ label, sub, value, onChange, min = 0, max = 100, step = 1, 
         {editing ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <input
-              type="number" value={draft} min={min} max={max} step={step} autoFocus
+              type="number" value={draft} autoFocus
+              min={yenInput ? 0 : min} max={yenInput ? max * 10000 : max} step={yenInput ? 1 : step}
+              placeholder={yenInput ? '0' : String(min)}
               onChange={(e) => setDraft(e.target.value)}
               onBlur={commitEdit}
               onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
               style={{
-                width: 72, padding: '3px 6px', fontSize: 18, fontWeight: 700, color,
+                width: yenInput ? 100 : 72, padding: '3px 6px', fontSize: 18, fontWeight: 700, color,
                 border: `1.5px solid ${color}`, borderRadius: 8,
                 textAlign: 'right', outline: 'none', background: '#fff',
                 MozAppearance: 'textfield',
               }}
             />
-            <span style={{ ...S.unit, fontSize: 13 }}>{unit}</span>
+            <span style={{ ...S.unit, fontSize: 13 }}>{yenInput ? '円' : unit}</span>
           </div>
         ) : (
           <button
             onClick={startEdit}
             style={{
-              background: `${color}12`, border: `1.5px solid ${color}40`,
-              borderRadius: 10, padding: '4px 10px', cursor: 'pointer',
+              background: isNull ? '#f3f4f6' : `${color}12`,
+              border: `1.5px solid ${isNull ? '#d1d5db' : color + '40'}`,
+              borderRadius: 10, padding: '4px 10px',
+              cursor: 'pointer',
               display: 'flex', alignItems: 'baseline', gap: 3,
             }}
           >
-            <span style={{ fontSize: 18, fontWeight: 700, color, lineHeight: 1 }}>{format(value)}</span>
-            <span style={{ ...S.unit, fontSize: 12 }}>{unit}</span>
+            {isNull
+              ? <span style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, lineHeight: 1 }}>未入力</span>
+              : <span style={{ fontSize: 18, fontWeight: 700, color, lineHeight: 1 }}>{format(value)}</span>
+            }
+            {!isNull && <span style={{ ...S.unit, fontSize: 12 }}>{unit}</span>}
           </button>
         )}
       </div>
       <input
-        type="range" min={min} max={max} step={step} value={value}
+        type="range" min={min} max={max} step={step} value={displayValue}
         onChange={(e) => onChange(Number(e.target.value))}
-        style={{ width: '100%', accentColor: color, cursor: 'pointer', display: 'block' }}
+        style={{ width: '100%', accentColor: isNull ? '#d1d5db' : color, cursor: 'pointer', display: 'block' }}
       />
+      {isNull && hint && (
+        <div style={{
+          marginTop: 8, padding: '7px 11px', borderRadius: 8,
+          background: '#f0fdf4', border: '1px solid #bbf7d0',
+          fontSize: 11, color: '#15803d', lineHeight: 1.6,
+        }}>
+          💡 {hint}
+        </div>
+      )}
     </div>
   );
 };
@@ -358,7 +428,7 @@ const EXP_CATEGORIES = [
 const calcExpTotal = (form) => {
   const monthly = EXP_CATEGORIES.filter(c => !c.isAnnual)
     .reduce((sum, c) => sum + (form[c.key] ?? 0), 0);
-  const annual = (form.expAnnualExtra ?? 20) / 12;
+  const annual = (form.expAnnualExtra ?? 0) / 12;
   return Math.round((monthly + annual) * 10) / 10;
 };
 
@@ -371,9 +441,11 @@ const ExpenseDetailAccordion = ({ form, setForm }) => {
   const hasMismatch = Math.abs(total - (form.monthlyExpense ?? 0)) >= 0.2;
 
   const commitDraft = (cat) => {
-    const n = parseFloat(draft);
-    if (!isNaN(n) && n >= 0 && n <= cat.max) {
-      const rounded = Math.round(n * 10) / 10;
+    const n = parseInt(draft.replace(/,/g, ''), 10);
+    if (!isNaN(n) && n >= 0) {
+      const inMan = n / 10000;
+      const clamped = Math.min(cat.max, inMan);
+      const rounded = Math.round(clamped * 10000) / 10000;
       setForm(prev => {
         const next = { ...prev, [cat.key]: rounded };
         next.monthlyExpense = calcExpTotal(next);
@@ -403,7 +475,7 @@ const ExpenseDetailAccordion = ({ form, setForm }) => {
         }}
       >
         <span>
-          {hasMismatch ? '⚠️ ' : ''}カテゴリ別入力（合計 {total}万円/月）
+          {hasMismatch ? '! ' : ''}カテゴリ別入力（合計 {total}万円/月）
         </span>
         <span style={{ fontSize: 13 }}>{open ? '▲' : '▼'}</span>
       </button>
@@ -436,7 +508,9 @@ const ExpenseDetailAccordion = ({ form, setForm }) => {
       {open && (
         <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 0 }}>
           {EXP_CATEGORIES.map((cat, idx) => {
-            const val = form[cat.key] ?? 0;
+            const rawVal = form[cat.key];
+            const isNull = rawVal === null || rawVal === undefined;
+            const val = isNull ? 0 : rawVal;
             const isLast = idx === EXP_CATEGORIES.length - 1;
             const isEditing = editingKey === cat.key;
             const displayVal = val % 1 === 0 ? val : val.toFixed(1);
@@ -463,20 +537,31 @@ const ExpenseDetailAccordion = ({ form, setForm }) => {
                           if (e.key === 'Escape') setEditingKey(null);
                         }}
                         style={{
-                          width: 64, textAlign: 'right', fontSize: 14, fontWeight: 700,
+                          width: 84, textAlign: 'right', fontSize: 14, fontWeight: 700,
                           color: C.greenDark, border: `1.5px solid ${C.greenDark}`,
                           borderRadius: 6, padding: '2px 4px', outline: 'none', background: C.greenBg,
                         }}
                       />
-                      <span style={{ fontSize: 11, color: C.textMuted }}>{unitLabel}</span>
+                      <span style={{ fontSize: 11, color: C.textMuted }}>{cat.isAnnual ? '円/年' : '円/月'}</span>
                     </div>
+                  ) : isNull ? (
+                    <button
+                      onClick={() => { setDraft(''); setEditingKey(cat.key); }}
+                      style={{
+                        fontSize: 12, fontWeight: 700, color: C.textMuted,
+                        background: C.bg, border: `1.5px solid ${C.border}`,
+                        borderRadius: 6, padding: '2px 8px', cursor: 'pointer',
+                      }}
+                    >
+                      未入力
+                    </button>
                   ) : (
                     <button
-                      onClick={() => { setDraft(String(displayVal)); setEditingKey(cat.key); }}
+                      onClick={() => { setDraft(String(Math.round((rawVal ?? 0) * 10000))); setEditingKey(cat.key); }}
                       style={{ fontSize: 14, fontWeight: 700, color: C.greenDark, background: 'none',
                         border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline dotted' }}
                     >
-                      {displayVal}<span style={S.unit}>{unitLabel}</span>
+                      {Math.round((rawVal ?? 0) * 10000).toLocaleString()}<span style={S.unit}>{cat.isAnnual ? '円/年' : '円/月'}</span>
                     </button>
                   )}
                 </div>
@@ -515,24 +600,26 @@ const ExpenseDetailAccordion = ({ form, setForm }) => {
 // ExistingLoansSection — 既存借入・固定返済の入力
 // ─────────────────────────────────────────────────────────────
 const LOAN_TYPE_OPTIONS = [
-  { id: 'mortgage',  label: '住宅ローン', icon: '🏠' },
-  { id: 'car',       label: '車ローン',   icon: '🚗' },
-  { id: 'education', label: '奨学金',     icon: '🎓' },
-  { id: 'card',      label: 'カード',     icon: '💳' },
-  { id: 'other',     label: 'その他',     icon: '📋' },
+  { id: 'mortgage',  label: '住宅ローン', svgName: 'house'     },
+  { id: 'car',       label: '車ローン',   svgName: 'car'       },
+  { id: 'education', label: '奨学金',     svgName: 'school'    },
+  { id: 'card',      label: 'カード',     svgName: 'card'      },
+  { id: 'other',     label: 'その他',     svgName: 'clipboard' },
 ];
 
 const LoanRow = ({ loan, onUpdate, onRemove, currentAge }) => {
-  const annualCost = (loan.monthlyPayment ?? 0) * 12;
+  // monthlyPayment は千円単位（例: 50 = 50千円 = 5万円）
+  const monthlyK   = loan.monthlyPayment ?? 0;
+  const annualMan  = Math.round(monthlyK * 12 / 10); // 万円/年
   const remaining  = Math.max(0, (loan.endAge ?? currentAge) - currentAge);
 
   const [editing, setEditing] = React.useState(false);
   const [draft,   setDraft]   = React.useState('');
 
-  const startEdit = () => { setDraft(String(loan.monthlyPayment ?? 0)); setEditing(true); };
+  const startEdit = () => { setDraft(String(monthlyK * 1000)); setEditing(true); };
   const commitEdit = () => {
-    const n = parseFloat(draft.replace(/,/g, ''));
-    if (!isNaN(n)) onUpdate('monthlyPayment', Math.max(0, Math.min(100, Math.round(n * 10) / 10)));
+    const n = parseInt(draft.replace(/,/g, ''), 10);
+    if (!isNaN(n)) onUpdate('monthlyPayment', Math.max(0, Math.min(1000, Math.round(n / 1000))));
     setEditing(false);
   };
 
@@ -553,8 +640,10 @@ const LoanRow = ({ loan, onUpdate, onRemove, currentAge }) => {
                 background: active ? C.greenBg : C.white,
                 color: active ? C.greenDark : C.textMuted,
                 fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 4,
               }}>
-                {opt.icon} {opt.label}
+                <SvgIcon name={opt.svgName} size={13} color={active ? C.greenDark : C.textMuted} />
+                {opt.label}
               </button>
             );
           })}
@@ -574,18 +663,18 @@ const LoanRow = ({ loan, onUpdate, onRemove, currentAge }) => {
           {editing ? (
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
               <input
-                type="number" value={draft} min={0} max={100} step={0.1} autoFocus
+                type="number" value={draft} min={0} max={1000000} step={1000} autoFocus
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={commitEdit}
                 onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                 style={{
-                  width: 64, padding: '3px 6px', fontSize: 16, fontWeight: 700,
+                  width: 90, padding: '3px 6px', fontSize: 16, fontWeight: 700,
                   color: C.greenDark, border: `1.5px solid ${C.greenDark}`,
                   borderRadius: 8, textAlign: 'right', outline: 'none', background: C.white,
                   MozAppearance: 'textfield',
                 }}
               />
-              <span style={{ fontSize: 12, color: C.textMuted }}>万円/月</span>
+              <span style={{ fontSize: 12, color: C.textMuted }}>円/月</span>
             </div>
           ) : (
             <button onClick={startEdit} style={{
@@ -593,19 +682,19 @@ const LoanRow = ({ loan, onUpdate, onRemove, currentAge }) => {
               borderRadius: 8, padding: '3px 10px', cursor: 'pointer',
               display: 'flex', alignItems: 'baseline', gap: 3,
             }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: C.greenDark }}>{loan.monthlyPayment ?? 0}</span>
-              <span style={{ fontSize: 11, color: C.textMuted }}>万円/月</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: C.greenDark }}>{(monthlyK * 1000).toLocaleString()}</span>
+              <span style={{ fontSize: 11, color: C.textMuted }}>円/月</span>
             </button>
           )}
         </div>
         <input
-          type="range" min={0} max={50} step={0.1}
-          value={loan.monthlyPayment ?? 0}
+          type="range" min={0} max={500} step={1}
+          value={monthlyK}
           onChange={(e) => onUpdate('monthlyPayment', Number(e.target.value))}
           style={{ width: '100%', accentColor: C.greenDark, cursor: 'pointer', display: 'block', marginBottom: 2 }}
         />
         <div style={{ fontSize: 11, color: C.textMuted, textAlign: 'right' }}>
-          年間 {annualCost.toFixed(0)}万円
+          年間 {annualMan}万円
         </div>
       </div>
 
@@ -632,10 +721,11 @@ const LoanRow = ({ loan, onUpdate, onRemove, currentAge }) => {
 };
 
 const ExistingLoansSection = ({ loans, setLoans, currentAge }) => {
-  const totalMonthly = loans.reduce((sum, l) => sum + (l.monthlyPayment ?? 0), 0);
+  // monthlyPayment は千円単位なので合計も千円
+  const totalMonthlyK = loans.reduce((sum, l) => sum + (l.monthlyPayment ?? 0), 0);
   const addLoan = () => {
     const id = `loan_${Date.now()}`;
-    setLoans(prev => [...prev, { id, type: 'other', monthlyPayment: 5, endAge: currentAge + 10 }]);
+    setLoans(prev => [...prev, { id, type: 'other', monthlyPayment: 50, endAge: currentAge + 10 }]);
   };
   const removeLoan = (id) => setLoans(prev => prev.filter(l => l.id !== id));
   const updateLoan = (id, key, value) =>
@@ -644,10 +734,10 @@ const ExistingLoansSection = ({ loans, setLoans, currentAge }) => {
   return (
     <div style={{ ...S.section, marginBottom: 12 }}>
       <div style={{ ...S.sectionTitle, marginBottom: loans.length > 0 ? 12 : 0 }}>
-        💳 現在の借入・固定返済
-        {totalMonthly > 0 && (
+        <SvgIcon name="card" size={15} /> 現在の借入・固定返済
+        {totalMonthlyK > 0 && (
           <span style={{ marginLeft: 'auto', fontSize: 11, color: C.textMuted, fontWeight: 600 }}>
-            合計 {totalMonthly.toFixed(1)}万円/月
+            合計 {(totalMonthlyK * 1000).toLocaleString()}円/月
           </span>
         )}
       </div>
@@ -871,10 +961,51 @@ const HousingSection = ({ form, setForm, currentAge }) => {
   const [draftProp, setDraftProp]       = React.useState('');
   const [editingDown, setEditingDown]   = React.useState(false);
   const [draftDown, setDraftDown]       = React.useState('');
+  const [editingAge, setEditingAge]     = React.useState(false);
+  const [draftAge,  setDraftAge]        = React.useState('');
+  const [editKey,   setEditKey]         = React.useState(null);
+  const [draftAdv,  setDraftAdv]        = React.useState('');
+  const [editKeyIsYen, setEditKeyIsYen] = React.useState(false);
 
-  const housingStyle = form.housingStyle ?? 'mansion';
-  const propPrice    = form.propertyPrice ?? 3500;
-  const downPay      = Math.min(form.downPayment ?? 350, Math.floor(propPrice * 0.5));
+  // 詳細設定フィールドの直接入力ヘルパー
+  const startAdv  = (key, val, yen = false) => {
+    setEditKey(key);
+    setEditKeyIsYen(yen);
+    setDraftAdv(yen ? String(Math.round(val * 10000)) : String(val));
+  };
+  const commitAdv = (key, min, max, step) => {
+    const n = parseFloat(draftAdv);
+    if (!isNaN(n)) {
+      const value   = editKeyIsYen ? n / 10000 : n;
+      const clamped  = Math.max(min, Math.min(max, value));
+      const decimals = String(step).includes('.') ? String(step).split('.')[1].length : 0;
+      const snapped  = parseFloat((Math.round(clamped / step) * step).toFixed(decimals));
+      set(key)(snapped);
+    }
+    setEditKey(null);
+  };
+  const advInput  = (key, min, max, step) => ({
+    type: 'number', value: draftAdv,
+    min: editKeyIsYen ? 0 : min,
+    max: editKeyIsYen ? max * 10000 : max,
+    step: editKeyIsYen ? 1 : step,
+    autoFocus: true,
+    onChange:  (e) => setDraftAdv(e.target.value),
+    onBlur:    ()  => commitAdv(key, min, max, step),
+    onKeyDown: (e) => { if (e.key === 'Enter') e.currentTarget.blur(); },
+    style: {
+      width: editKeyIsYen ? 90 : 68, padding: '2px 5px', fontSize: 14, fontWeight: 700,
+      color: C.greenDark, border: `1.5px solid ${C.greenDark}`, borderRadius: 8,
+      textAlign: 'right', outline: 'none', background: C.white,
+      MozAppearance: 'textfield',
+    },
+  });
+
+  const housingStyle   = form.housingStyle ?? 'mansion';
+  const propPriceNull  = form.propertyPrice === null || form.propertyPrice === undefined;
+  const propPrice      = propPriceNull ? 3500 : form.propertyPrice;
+  const downPayNull    = form.downPayment === null || form.downPayment === undefined;
+  const downPay        = downPayNull ? 0 : Math.min(form.downPayment, Math.floor(propPrice * 0.5));
   const mRate        = form.mortgageRate ?? 1.0;
   const mTerm        = form.mortgageTerm ?? 35;
   const loanAmt      = Math.max(0, propPrice - downPay);
@@ -903,8 +1034,6 @@ const HousingSection = ({ form, setForm, currentAge }) => {
             onClick={() => setForm(prev => ({
               ...prev,
               housingPurchaseAge: currentAge + 5,
-              propertyPrice:  prev.propertyPrice  ?? 3500,
-              downPayment:    prev.downPayment    ?? 350,
               mortgageRate:   prev.mortgageRate   ?? 1.0,
               mortgageTerm:   prev.mortgageTerm   ?? 35,
               mortgageType:   prev.mortgageType   ?? 'variable',
@@ -931,10 +1060,40 @@ const HousingSection = ({ form, setForm, currentAge }) => {
           <div style={S.labelSub}>マンション・一戸建て</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <div>
-            <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{form.housingPurchaseAge}</span>
-            <span style={S.unit}>歳</span>
-          </div>
+          {editingAge ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <input
+                type="number" autoFocus value={draftAge}
+                min={currentAge + 1} max={65} step={1}
+                onChange={(e) => setDraftAge(e.target.value)}
+                onBlur={() => {
+                  const n = parseInt(draftAge, 10);
+                  if (!isNaN(n)) set('housingPurchaseAge')(Math.max(currentAge + 1, Math.min(65, n)));
+                  setEditingAge(false);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                style={{
+                  width: 54, padding: '2px 5px', fontSize: 16, fontWeight: 700,
+                  color: C.greenDark, border: `1.5px solid ${C.greenDark}`, borderRadius: 8,
+                  textAlign: 'center', outline: 'none', background: C.white,
+                  MozAppearance: 'textfield',
+                }}
+              />
+              <span style={S.unit}>歳</span>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setDraftAge(String(form.housingPurchaseAge)); setEditingAge(true); }}
+              style={{
+                background: `${C.greenDark}12`, border: `1.5px solid ${C.greenDark}40`,
+                borderRadius: 8, padding: '3px 8px', cursor: 'pointer',
+                display: 'flex', alignItems: 'baseline', gap: 3,
+              }}
+            >
+              <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{form.housingPurchaseAge}</span>
+              <span style={S.unit}>歳</span>
+            </button>
+          )}
           <button onClick={() => set('housingPurchaseAge')(null)} style={{
             padding: '4px 12px', borderRadius: 999,
             border: `1.5px solid ${C.greenDark}`, background: C.greenBg,
@@ -972,7 +1131,7 @@ const HousingSection = ({ form, setForm, currentAge }) => {
       {/* 住宅価格 + 頭金（横並び） */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted }}>想定住宅価格</div>
             {editingProp ? (
               <input
@@ -992,6 +1151,12 @@ const HousingSection = ({ form, setForm, currentAge }) => {
                   border: `1.5px solid ${C.greenDark}`, borderRadius: 6, padding: '2px 4px',
                   outline: 'none', background: C.greenBg }}
               />
+            ) : propPriceNull ? (
+              <button onClick={() => { setDraftProp(''); setEditingProp(true); }}
+                style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, background: C.bg,
+                  border: `1.5px solid ${C.border}`, borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>
+                未入力
+              </button>
             ) : (
               <button onClick={() => { setDraftProp(String(propPrice)); setEditingProp(true); }}
                 style={{ fontSize: 14, fontWeight: 700, color: C.text, background: 'none',
@@ -1001,13 +1166,13 @@ const HousingSection = ({ form, setForm, currentAge }) => {
             )}
           </div>
           <input type="range" min={500} max={12000} step={100}
-            value={propPrice}
+            value={propPriceNull ? 500 : propPrice}
             onChange={e => set('propertyPrice')(Number(e.target.value))}
             style={{ width: '100%', accentColor: C.greenDark, cursor: 'pointer', display: 'block' }}
           />
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted }}>頭金</div>
             {editingDown ? (
               <input
@@ -1028,6 +1193,12 @@ const HousingSection = ({ form, setForm, currentAge }) => {
                   border: `1.5px solid ${C.greenDark}`, borderRadius: 6, padding: '2px 4px',
                   outline: 'none', background: C.greenBg }}
               />
+            ) : downPayNull ? (
+              <button onClick={() => { setDraftDown(''); setEditingDown(true); }}
+                style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, background: C.bg,
+                  border: `1.5px solid ${C.border}`, borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>
+                未入力
+              </button>
             ) : (
               <button onClick={() => { setDraftDown(String(downPay)); setEditingDown(true); }}
                 style={{ fontSize: 14, fontWeight: 700, color: C.text, background: 'none',
@@ -1135,11 +1306,25 @@ const HousingSection = ({ form, setForm, currentAge }) => {
 
           {/* 金利 */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>
                 金利 <span style={{ fontSize: 10, color: C.textMuted }}>（年利）</span>
               </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{mRate.toFixed(1)}<span style={S.unit}>%</span></div>
+              {editKey === 'mortgageRate' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <input {...advInput('mortgageRate', 0.1, 5, 0.1)} />
+                  <span style={S.unit}>%</span>
+                </div>
+              ) : (
+                <button onClick={() => startAdv('mortgageRate', mRate)} style={{
+                  background: `${C.greenDark}12`, border: `1.5px solid ${C.greenDark}40`,
+                  borderRadius: 8, padding: '3px 8px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'baseline', gap: 2,
+                }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{mRate.toFixed(1)}</span>
+                  <span style={S.unit}>%</span>
+                </button>
+              )}
             </div>
             <input type="range" min={0.1} max={5.0} step={0.1} value={mRate}
               onChange={e => set('mortgageRate')(Number(e.target.value))}
@@ -1177,14 +1362,26 @@ const HousingSection = ({ form, setForm, currentAge }) => {
 
           {/* 購入諸費用率 */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <div>
                 <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>購入諸費用率</span>
                 <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 6 }}>登記・仲介・税など</span>
               </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
-                {miscRate}% <span style={{ fontSize: 11, color: C.textMuted }}>（{Math.round(propPrice * miscRate / 100)}万円）</span>
-              </div>
+              {editKey === 'miscCostRate' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <input {...advInput('miscCostRate', 2, 10, 0.5)} />
+                  <span style={S.unit}>%</span>
+                </div>
+              ) : (
+                <button onClick={() => startAdv('miscCostRate', miscRate)} style={{
+                  background: `${C.greenDark}12`, border: `1.5px solid ${C.greenDark}40`,
+                  borderRadius: 8, padding: '3px 8px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'baseline', gap: 4,
+                }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{miscRate}%</span>
+                  <span style={{ fontSize: 11, color: C.textMuted }}>（{Math.round(propPrice * miscRate / 100)}万円）</span>
+                </button>
+              )}
             </div>
             <input type="range" min={2} max={10} step={0.5} value={miscRate}
               onChange={e => set('miscCostRate')(Number(e.target.value))}
@@ -1195,14 +1392,28 @@ const HousingSection = ({ form, setForm, currentAge }) => {
           {/* 管理費・修繕積立（マンションのみ） */}
           {housingStyle === 'mansion' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <div>
                   <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>管理費・修繕積立</span>
                   <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 6 }}>マンション月次コスト</span>
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{mgmtFee}<span style={S.unit}>万円/月</span></div>
+                {editKey === 'managementFee' ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <input {...advInput('managementFee', 0.5, 8, 0.1)} />
+                    <span style={S.unit}>円/月</span>
+                  </div>
+                ) : (
+                  <button onClick={() => startAdv('managementFee', mgmtFee, true)} style={{
+                    background: `${C.greenDark}12`, border: `1.5px solid ${C.greenDark}40`,
+                    borderRadius: 8, padding: '3px 8px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'baseline', gap: 2,
+                  }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{Math.round(mgmtFee * 10000).toLocaleString()}</span>
+                    <span style={S.unit}>円/月</span>
+                  </button>
+                )}
               </div>
-              <input type="range" min={0.5} max={8} step={0.5} value={mgmtFee}
+              <input type="range" min={0.5} max={8} step={0.1} value={mgmtFee}
                 onChange={e => set('managementFee')(Number(e.target.value))}
                 style={{ width: '100%', accentColor: C.greenDark, cursor: 'pointer', display: 'block' }}
               />
@@ -1211,14 +1422,28 @@ const HousingSection = ({ form, setForm, currentAge }) => {
 
           {/* 固定資産税 */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <div>
                 <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>固定資産税</span>
                 <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 6 }}>年額</span>
               </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{propTax}<span style={S.unit}>万円/年</span></div>
+              {editKey === 'propertyTax' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <input {...advInput('propertyTax', 1, 60, 0.1)} />
+                  <span style={S.unit}>円/年</span>
+                </div>
+              ) : (
+                <button onClick={() => startAdv('propertyTax', propTax, true)} style={{
+                  background: `${C.greenDark}12`, border: `1.5px solid ${C.greenDark}40`,
+                  borderRadius: 8, padding: '3px 8px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'baseline', gap: 2,
+                }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{Math.round(propTax * 10000).toLocaleString()}</span>
+                  <span style={S.unit}>円/年</span>
+                </button>
+              )}
             </div>
-            <input type="range" min={5} max={60} step={1} value={propTax}
+            <input type="range" min={1} max={60} step={0.1} value={propTax}
               onChange={e => set('propertyTax')(Number(e.target.value))}
               style={{ width: '100%', accentColor: C.greenDark, cursor: 'pointer', display: 'block' }}
             />
@@ -1226,16 +1451,30 @@ const HousingSection = ({ form, setForm, currentAge }) => {
 
           {/* 駐車場代 */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <div>
                 <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>駐車場代</span>
                 <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 6 }}>月額（0=なし）</span>
               </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
-                {parkFee === 0 ? 'なし' : `${parkFee}万円/月`}
-              </div>
+              {editKey === 'parkingFee' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <input {...advInput('parkingFee', 0, 5, 0.1)} />
+                  <span style={S.unit}>円/月</span>
+                </div>
+              ) : (
+                <button onClick={() => startAdv('parkingFee', parkFee, true)} style={{
+                  background: `${C.greenDark}12`, border: `1.5px solid ${C.greenDark}40`,
+                  borderRadius: 8, padding: '3px 8px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'baseline', gap: 2,
+                }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
+                    {parkFee === 0 ? 'なし' : Math.round(parkFee * 10000).toLocaleString()}
+                  </span>
+                  {parkFee > 0 && <span style={S.unit}>円/月</span>}
+                </button>
+              )}
             </div>
-            <input type="range" min={0} max={5} step={0.5} value={parkFee}
+            <input type="range" min={0} max={5} step={0.1} value={parkFee}
               onChange={e => set('parkingFee')(Number(e.target.value))}
               style={{ width: '100%', accentColor: C.greenDark, cursor: 'pointer', display: 'block' }}
             />
@@ -1261,32 +1500,49 @@ const HousingSection = ({ form, setForm, currentAge }) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// MiniGauge — 常時表示の余裕度バー
+// InputProgressBar — 入力完了度バー（スコアの代替）
 // ─────────────────────────────────────────────────────────────
-const MiniGauge = ({ gauge, message }) => {
-  const color = gauge >= 80 ? C.green : gauge >= 50 ? C.amber : C.red;
+const InputProgressBar = ({ form }) => {
+  const nn = (v) => v !== null && v !== undefined; // non-null check
+  const steps = [
+    { key: 'basic',   label: '基本情報', done: nn(form.currentAge) },
+    { key: 'income',  label: '収入',     done: nn(form.selfIncome) && nn(form.spouseIncome) },
+    { key: 'expense', label: '支出',     done: nn(form.monthlyExpense) },
+    { key: 'asset',   label: '資産',     done: nn(form.currentSavings) && nn(form.monthlyInvestment) },
+    { key: 'housing', label: '住宅',     done: nn(form.housingPurchaseAge), optional: true },
+  ];
+  const required = steps.filter(s => !s.optional);
+  const completedCount = required.filter(s => s.done).length;
+  const pct = Math.round((completedCount / required.length) * 100);
+
   return (
-    <div style={{
-      background: C.white, borderRadius: 16, padding: '14px 18px',
-      border: `1.5px solid ${color}30`, marginBottom: 12,
-      display: 'flex', alignItems: 'center', gap: 14,
-      boxShadow: `0 2px 12px ${color}18`,
-    }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: '0.08em', marginBottom: 6 }}>
-          生活安全度
-        </div>
-        <div style={{ height: 8, background: '#f0f0f0', borderRadius: 99, overflow: 'hidden' }}>
-          <div style={{
-            height: '100%', width: `${gauge}%`, borderRadius: 99, background: color,
-            transition: 'width 0.5s cubic-bezier(0.34,1.2,0.64,1)',
-          }} />
-        </div>
-        <div style={{ fontSize: 11, color, fontWeight: 600, marginTop: 6 }}>{message}</div>
+    <div style={{ padding: '6px 16px 10px', borderTop: `1px solid ${C.border}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+        <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 600 }}>入力完了度</span>
+        <span style={{ fontSize: 13, color: C.greenDark, fontWeight: 700 }}>{pct}%</span>
       </div>
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <div style={{ fontSize: 26, fontWeight: 900, color, lineHeight: 1 }}>{gauge}</div>
-        <div style={{ fontSize: 10, color: C.textMuted }}>/ 100</div>
+      <div style={{ height: 4, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
+        <div style={{
+          height: '100%', width: `${pct}%`, borderRadius: 99,
+          background: `linear-gradient(90deg, ${C.green}, ${C.greenDark})`,
+          transition: 'width 0.4s ease',
+        }} />
+      </div>
+      <div style={{ display: 'flex', gap: 5 }}>
+        {steps.map(s => (
+          <div key={s.key} style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{
+              fontSize: 10, fontWeight: 700,
+              padding: '2px 3px', borderRadius: 6,
+              background: s.done ? '#f0fdf4' : '#f3f4f6',
+              color: s.done ? C.greenDark : C.textMuted,
+              border: `1px solid ${s.done ? '#bbf7d0' : '#e5e7eb'}`,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {s.done ? '✓' : s.optional ? '○' : '●'} {s.label}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1296,9 +1552,9 @@ const MiniGauge = ({ gauge, message }) => {
 // ライフタイプ定義
 // ─────────────────────────────────────────────────────────────
 const LIFE_TYPE_OPTS = [
-  { id: 'single', label: '一人暮らし', icon: '🌱' },
-  { id: 'couple', label: '共働き',     icon: '🌿' },
-  { id: 'family', label: '子育て中',   icon: '🍃' },
+  { id: 'single', label: '一人暮らし', svgIcon: 'person'  },
+  { id: 'couple', label: '共働き',     svgIcon: 'group'   },
+  { id: 'family', label: '子育て中',   svgIcon: 'people3' },
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -1327,7 +1583,8 @@ export const InputScreen = ({ onBack, onNext }) => {
   }, [adoptedMsg]);
 
   const gaugeResult = React.useMemo(() => calcInitialGauge(form), [form]);
-  const set         = (key) => (val) => setForm(prev => ({ ...prev, [key]: val }));
+
+  const set = (key) => (val) => setForm(prev => ({ ...prev, [key]: val }));
   const setLoans    = (updater) => setForm(prev => ({
     ...prev,
     existingLoans: typeof updater === 'function' ? updater(prev.existingLoans ?? []) : updater,
@@ -1354,7 +1611,7 @@ export const InputScreen = ({ onBack, onNext }) => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: "'Noto Sans JP', -apple-system, 'Apple Color Emoji', sans-serif" }}>
       <style>{`
         input[type=range] { -webkit-appearance: none; appearance: none; height: 5px; border-radius: 99px; background: #e5e7eb; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #16a34a; border: 3px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,0.22); cursor: pointer; transition: transform 0.1s; }
@@ -1366,21 +1623,27 @@ export const InputScreen = ({ onBack, onNext }) => {
 
       {/* ── ヘッダー ── */}
       <div style={{
-        position: 'sticky', top: 0, zIndex: 50,
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
         background: 'rgba(249,250,251,0.96)', backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)', borderBottom: `1px solid ${C.border}`,
-        padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12,
+        paddingTop: 'env(safe-area-inset-top, 0px)',
       }}>
-        <button onClick={handleBack} style={{
-          width: 36, height: 36, borderRadius: '50%',
-          border: `1.5px solid ${C.border}`, background: C.white,
-          fontSize: 15, cursor: 'pointer', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', color: C.textMuted,
-        }}>←</button>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>ライフプラン入力</div>
-          <div style={{ fontSize: 11, color: C.textMuted }}>入力するほど精度が上がります</div>
+        <div style={{
+          height: 56, display: 'flex', alignItems: 'center', gap: 4, padding: '0 16px 0 4px',
+        }}>
+          <button onClick={handleBack} style={{
+            width: 44, height: 56, borderRadius: 0, border: 'none',
+            background: 'transparent', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <SvgIcon name="chevron" size={28} color={C.greenDark} />
+          </button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 17, fontWeight: 600, color: C.text, lineHeight: 1.25 }}>ライフプラン入力</div>
+            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, lineHeight: 1 }}>入力するほど精度が上がります</div>
+          </div>
         </div>
+        <InputProgressBar form={form} />
       </div>
 
       {/* ── 比較案採用トースト（fixed で常に可視） ── */}
@@ -1402,37 +1665,11 @@ export const InputScreen = ({ onBack, onNext }) => {
       <style>{`@keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`}</style>
 
       {/* ── スクロールエリア ── */}
-      <div style={{ padding: '16px 16px 120px', maxWidth: 480, margin: '0 auto' }}>
-
-        {/* 説明文 */}
-        <div style={{
-          fontSize: 13, color: C.text, fontWeight: 600,
-          lineHeight: 1.65, marginBottom: 6, paddingLeft: 2,
-        }}>
-          ライフプラン入力
-        </div>
-        <div style={{
-          fontSize: 12, color: C.textMuted, fontWeight: 500,
-          lineHeight: 1.6, marginBottom: 14, paddingLeft: 2,
-        }}>
-          住宅購入・教育費・老後まで、あなたの家計が耐えられるかを確認します。
-        </div>
-
-        {/* 軽い案内（スコアは入力後に表示） */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 7,
-          fontSize: 11, color: C.textMuted, fontWeight: 500,
-          background: '#f8fafc', borderRadius: 10,
-          padding: '8px 14px', marginBottom: 14,
-          border: `1px solid ${C.border}`,
-        }}>
-          <span style={{ fontSize: 13 }}>📊</span>
-          <span>収入・支出を入力すると、家計安全度が自動で更新されます</span>
-        </div>
+      <div style={{ padding: '136px 16px 110px', maxWidth: 480, margin: '0 auto' }}>
 
         {/* ══ セクション① 基本情報 ═══════════════════════════════ */}
         <div style={S.section}>
-          <div style={S.sectionTitle}>👤 基本情報</div>
+          <div style={S.sectionTitle}><SvgIcon name="person" size={15} /> 基本情報</div>
 
           {/* 現在の年齢 */}
           <div style={S.row}>
@@ -1443,23 +1680,27 @@ export const InputScreen = ({ onBack, onNext }) => {
           </div>
 
           {/* ライフタイプ */}
-          <div style={S.rowLast}>
-            <div style={{ flex: 1 }}>
+          <div style={{ ...S.rowLast, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+            <div>
               <div style={S.label}>ライフスタイル</div>
               <div style={S.labelSub}>現在の生活状況</div>
             </div>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, width: '100%' }}>
               {LIFE_TYPE_OPTS.map(opt => {
                 const active = (form.lifeType ?? 'couple') === opt.id;
+                const iconColor = active ? '#ffffff' : C.textMuted;
                 return (
                   <button key={opt.id} onClick={() => set('lifeType')(opt.id)} style={{
-                    padding: '5px 10px', borderRadius: 999,
+                    height: 44, borderRadius: 10, minWidth: 0, width: '100%',
                     border: `1.5px solid ${active ? C.greenDark : C.border}`,
-                    background: active ? C.greenBg : C.white,
-                    color: active ? C.greenDark : C.textMuted,
-                    fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                    background: active ? C.greenDark : C.white,
+                    color: active ? '#fff' : C.textMuted,
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    gap: 5, padding: '0 4px', boxSizing: 'border-box',
                   }}>
-                    {opt.icon} {opt.label}
+                    <SvgIcon name={opt.svgIcon} size={15} color={iconColor} />
+                    <span style={{ whiteSpace: 'nowrap' }}>{opt.label}</span>
                   </button>
                 );
               })}
@@ -1469,17 +1710,60 @@ export const InputScreen = ({ onBack, onNext }) => {
 
         {/* ══ セクション② 収入 ═══════════════════════════════════ */}
         <div style={S.section}>
-          <div style={S.sectionTitle}>💼 収入</div>
+          <div style={S.sectionTitle}><SvgIcon name="briefcase" size={15} /> 収入</div>
 
           <SliderRow label="本人年収" value={form.selfIncome} onChange={set('selfIncome')}
             min={100} max={1500} step={10} format={v => v.toLocaleString()} unit="万円/年" />
 
-          <SliderRow label="配偶者年収" sub="0万円 = 配偶者なし or 専業主婦"
+          <SliderRow
+            label={form.spouseOnParentalLeave ? '配偶者 育休給付（手取り/年）' : '配偶者年収'}
+            sub={form.spouseOnParentalLeave
+              ? '月の手取り額×12を入力。育休中は社会保険料なし'
+              : '0万円 = 配偶者なし or 専業主婦'}
             value={form.spouseIncome} onChange={set('spouseIncome')}
             min={0} max={1000} step={10}
             format={v => v === 0 ? 'なし' : v.toLocaleString()}
             unit={form.spouseIncome > 0 ? '万円/年' : ''}
             color={form.spouseIncome > 0 ? C.greenDark : C.textMuted} />
+
+          {/* 育休・産休トグル */}
+          {form.spouseIncome > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 0', borderBottom: `1px solid ${C.border}`,
+            }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>育休・産休中</div>
+                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+                  {form.spouseOnParentalLeave
+                    ? '手取り額で入力中（社会保険料免除）'
+                    : '該当する場合はONにしてください'}
+                </div>
+              </div>
+              <button
+                onClick={() => set('spouseOnParentalLeave')(!form.spouseOnParentalLeave)}
+                style={{
+                  width: 46, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
+                  background: form.spouseOnParentalLeave ? C.greenDark : '#d1d5db',
+                  position: 'relative', flexShrink: 0, transition: 'background 0.2s',
+                }}
+              >
+                <div style={{
+                  width: 22, height: 22, borderRadius: '50%', background: '#fff',
+                  position: 'absolute', top: 2,
+                  left: form.spouseOnParentalLeave ? 22 : 2,
+                  transition: 'left 0.2s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                }} />
+              </button>
+            </div>
+          )}
+
+          {form.spouseIncome > 0 && (
+            <SliderRow label="配偶者の年齢" sub="年金・退職時期の試算に使用します"
+              value={form.spouseAge ?? currentAge - 2} onChange={set('spouseAge')}
+              min={20} max={65} step={1} format={v => `${v}歳`} />
+          )}
 
           {form.spouseIncome > 0 && (
             <SliderRow label="配偶者復職年齢" sub="育休・離職からの復帰予定"
@@ -1487,19 +1771,150 @@ export const InputScreen = ({ onBack, onNext }) => {
               min={currentAge} max={60} step={1} format={v => `${v}歳`} />
           )}
 
+          {/* 復職後年収（育休中の場合のみ表示） */}
+          {form.spouseIncome > 0 && form.spouseOnParentalLeave && (
+            <SliderRow
+              label="配偶者の復職後年収"
+              sub={`復職時の見込み年収（額面）。現在は育休給付 ${form.spouseIncome}万円/年`}
+              value={form.spouseReturnIncome ?? form.spouseIncome}
+              onChange={set('spouseReturnIncome')}
+              min={0} max={1000} step={10}
+              format={v => v === 0 ? 'なし' : v.toLocaleString()}
+              unit="万円/年"
+              color={C.greenDark}
+            />
+          )}
+
           <SliderRow label="年収上昇率" sub="毎年の昇給率（目安1〜2%）"
             value={form.incomeGrowthRate} onChange={set('incomeGrowthRate')}
             min={0} max={5} step={0.1} format={v => v.toFixed(1)} unit="%/年" last />
+
+          {/* ── 手取り概算 ─────────────────────────────── */}
+          {(() => {
+            const selfGross   = form.selfIncome   ?? 0;
+            const spouseGross = form.spouseIncome ?? 0;
+            const selfNet     = selfGross   > 0 ? Math.round(selfGross   * calcNetRatio(selfGross)   / 12 * 10) / 10 : 0;
+            // 育休中は入力値がそのまま手取りのため calcNetRatio を適用しない
+            const spouseNet   = spouseGross > 0
+              ? (form.spouseOnParentalLeave
+                  ? Math.round(spouseGross / 12 * 10) / 10
+                  : Math.round(spouseGross * calcNetRatio(spouseGross) / 12 * 10) / 10)
+              : 0;
+            const totalNet    = Math.round((selfNet + spouseNet) * 10) / 10;
+            return (
+              <div style={{
+                marginTop: 14, padding: '12px 14px', borderRadius: 12,
+                background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.20)',
+              }}>
+                <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <SvgIcon name="money" size={13} color="#6b7280" />
+                  月の手取り概算（所得税・社会保険控除後）
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span style={{ fontSize: 24, fontWeight: 900, color: '#16a34a', lineHeight: 1 }}>
+                    {totalNet.toFixed(1)}
+                  </span>
+                  <span style={{ fontSize: 13, color: '#6b7280' }}>万円/月</span>
+                  {spouseNet > 0 && (
+                    <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 4 }}>
+                      （本人 {selfNet.toFixed(1)} + 配偶者 {spouseNet.toFixed(1)}）
+                    </span>
+                  )}
+                </div>
+                {form.spouseOnParentalLeave && form.spouseReturnIncome && form.spouseReturnIncome !== form.spouseIncome && (
+                  <div style={{ fontSize: 10, color: '#0369a1', marginTop: 4, background: '#f0f9ff', borderRadius: 6, padding: '4px 8px' }}>
+                    復職後（{form.spouseReturnAge ?? currentAge + 3}歳〜）は配偶者年収
+                    {' '}{Math.round(form.spouseReturnIncome * calcNetRatio(form.spouseReturnIncome) / 12 * 10) / 10}万円/月（手取り）に切り替わります
+                  </div>
+                )}
+                <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4 }}>
+                  * 年収・家族構成をもとにした概算です。実際の手取りとは異なる場合があります
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ══ セクション③ 支出 ════════════════════════════════════ */}
         <div style={S.section}>
-          <div style={S.sectionTitle}>🧾 支出</div>
+          <div style={S.sectionTitle}><SvgIcon name="receipt" size={15} /> 支出</div>
 
           <SliderRow label="月生活費（合計）" sub="家賃・食費・光熱費など（ローン返済は除く）"
             value={form.monthlyExpense} onChange={set('monthlyExpense')}
             min={5} max={60} step={1} format={v => v.toLocaleString()} unit="万円/月"
-            color={form.monthlyExpense > 30 ? C.red : C.greenDark} />
+            color={form.monthlyExpense > 30 ? C.red : C.greenDark}
+            hint="ざっくりでOK。一人暮らし15〜20万円、夫婦２人25〜35万円が目安です。下のカテゴリ別入力から自動合計もできます。"
+            yenInput />
+
+          {/* うち住居費 */}
+          <div style={{
+            background: '#f8fafc', borderRadius: 10, padding: '10px 14px',
+            border: '1px solid #e2e8f0', marginBottom: 8, marginTop: -4,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <div style={{
+                width: 3, height: 14, borderRadius: 2, background: C.greenDark, flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>うち住居費（家賃）</span>
+              <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 2 }}>— 月生活費の内訳</span>
+            </div>
+            <SliderRow
+              label="" sub="賃貸家賃・管理費など（住宅ローン除く）"
+              value={form.expHousing ?? 8}
+              onChange={v => set('expHousing')(Math.min(v, form.monthlyExpense ?? 60))}
+              min={0} max={30} step={0.5} format={v => v.toLocaleString()} unit="万円/月"
+              color={C.greenDark}
+              hint="住宅購入後はローン返済に自動で切り替わります。現在の家賃を入力してください。"
+            />
+            {(form.expHousing ?? 8) > (form.monthlyExpense ?? 0) && (
+              <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>
+                住居費が月生活費合計を超えています
+              </div>
+            )}
+          </div>
+
+          {/* 月間収支バランスチェック */}
+          {(() => {
+            const sg  = form.selfIncome   ?? 0;
+            const spg = form.spouseIncome ?? 0;
+            const sn  = sg  > 0 ? Math.round(sg  * calcNetRatio(sg)  / 12 * 10) / 10 : 0;
+            const spn = spg > 0 ? Math.round(spg * calcNetRatio(spg) / 12 * 10) / 10 : 0;
+            const netM   = Math.round((sn + spn) * 10) / 10;
+            const inv    = form.monthlyInvestment ?? 0;
+            const totalO = Math.round(((form.monthlyExpense ?? 0) + inv) * 10) / 10;
+            const bal    = Math.round((netM - totalO) * 10) / 10;
+            const over   = netM > 0 && bal < 0;
+            if (netM <= 0) return null;
+            return (
+              <div style={{
+                borderRadius: 10, padding: '10px 14px', marginBottom: 4, marginTop: 2,
+                background: over ? '#fef2f2' : '#f0fdf4',
+                border: `1px solid ${over ? '#fecaca' : '#bbf7d0'}`,
+              }}>
+                {over && (
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#dc2626', marginBottom: 4 }}>
+                    月間収支が赤字になっています
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
+                  <span>手取り月収（概算）</span>
+                  <span style={{ fontWeight: 700, color: '#111827' }}>{netM} 万円</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', marginBottom: 4 }}>
+                  <span>月生活費＋積立</span>
+                  <span style={{ fontWeight: 700, color: '#111827' }}>− {totalO} 万円</span>
+                </div>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 800,
+                  paddingTop: 4, borderTop: `1px solid ${over ? '#fecaca' : '#bbf7d0'}`,
+                  color: over ? '#dc2626' : '#16a34a',
+                }}>
+                  <span>月間余剰</span>
+                  <span>{bal >= 0 ? '+' : ''}{bal} 万円</span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 子ども人数 */}
           <div style={S.row}>
@@ -1565,81 +1980,9 @@ export const InputScreen = ({ onBack, onNext }) => {
           <ExpenseDetailAccordion form={form} setForm={setForm} />
         </div>
 
-        {/* ── 家計安全度チェック（基本情報・収入・支出入力後に表示） ── */}
-        {(() => {
-          const g     = gaugeResult;
-          const score = g.adjustedGauge ?? g.gauge;
-          const col   = score >= 80 ? C.green : score >= 60 ? '#65a30d' : score >= 40 ? C.amber : C.red;
-          const hasCorrBrk = g.baseGauge != null && g.baseGauge !== score && (g.corrections?.length ?? 0) > 0;
-          return (
-            <div style={{
-              background: C.white, borderRadius: 16,
-              padding: '16px 18px', marginBottom: 12,
-              border: `1.5px solid ${col}28`,
-              boxShadow: `0 2px 10px ${col}12`,
-            }}>
-              {/* ヘッダー行 */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: '0.08em', marginBottom: 6 }}>
-                    現在の家計安全度
-                  </div>
-                  {/* バー */}
-                  <div style={{ height: 7, background: '#f0f0f0', borderRadius: 99, overflow: 'hidden', marginBottom: 7 }}>
-                    <div style={{
-                      height: '100%', width: `${score}%`, borderRadius: 99, background: col,
-                      transition: 'width 0.55s cubic-bezier(0.34,1.2,0.64,1)',
-                    }} />
-                  </div>
-                  <div style={{ fontSize: 11, color: col, fontWeight: 600, lineHeight: 1.5 }}>{g.message}</div>
-                </div>
-                {/* スコア + バッジ */}
-                <div style={{ textAlign: 'center', flexShrink: 0 }}>
-                  <div style={{ fontSize: 36, fontWeight: 900, color: col, lineHeight: 1 }}>{score}</div>
-                  <div style={{
-                    fontSize: 10, fontWeight: 700, marginTop: 4,
-                    padding: '2px 9px', borderRadius: 999,
-                    background: g.status?.bg ?? '#f0fdf4',
-                    color: g.status?.color ?? col,
-                    border: `1px solid ${col}30`,
-                  }}>
-                    {g.status?.label}
-                  </div>
-                </div>
-              </div>
-
-              {/* 補正ブレイクダウン（ある場合のみ） */}
-              {hasCorrBrk && (
-                <div style={{
-                  marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}`,
-                  display: 'flex', flexWrap: 'wrap', gap: 6,
-                }}>
-                  <span style={{ fontSize: 10, color: C.textMuted, width: '100%', marginBottom: 2 }}>
-                    ベース {g.baseGauge} → 補正後 {score}（−{g.dampedTotal}点）
-                  </span>
-                  {g.corrections.map(c => (
-                    <span key={c.key} style={{
-                      fontSize: 10, padding: '2px 8px', borderRadius: 999,
-                      background: '#fff7ed', color: '#92400e',
-                      border: '1px solid #fde68a',
-                    }}>
-                      {c.icon} {c.label} −{c.pts}点
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* フッターノート */}
-              <div style={{ fontSize: 10, color: C.textMuted, marginTop: 8 }}>
-                ✏️ 収入・支出・住宅計画の入力値をもとに自動計算されます
-              </div>
-            </div>
-          );
-        })()}
-
         {/* ══ セクション④ 資産 ════════════════════════════════════ */}
         <div style={S.section}>
-          <div style={S.sectionTitle}>📈 資産・投資</div>
+          <div style={S.sectionTitle}><SvgIcon name="trending" size={15} /> 資産・投資</div>
 
           <SliderRow label="現在の貯蓄" sub="預金・現金の合計"
             value={form.currentSavings} onChange={set('currentSavings')}
@@ -1649,7 +1992,7 @@ export const InputScreen = ({ onBack, onNext }) => {
             value={form.monthlyInvestment} onChange={set('monthlyInvestment')}
             min={0} max={30} step={0.1}
             format={v => v === 0 ? '0' : v % 1 === 0 ? String(v) : v.toFixed(1)}
-            unit="万円/月" />
+            unit="万円/月" yenInput />
 
           <SliderRow label="想定利回り" sub="年平均リターン（NISA・インデックス目安5%）"
             value={form.investmentReturn} onChange={set('investmentReturn')}
@@ -1668,7 +2011,7 @@ export const InputScreen = ({ onBack, onNext }) => {
 
         {/* ══ セクション⑥ ライフイベント ══════════════════════════ */}
         <div style={S.section}>
-          <div style={S.sectionTitle}>📅 ライフイベント</div>
+          <div style={S.sectionTitle}><SvgIcon name="calendar" size={15} /> ライフイベント</div>
 
           <CarSection form={form} setForm={setForm} currentAge={currentAge} />
 
@@ -1680,7 +2023,7 @@ export const InputScreen = ({ onBack, onNext }) => {
 
         {/* ══ セクション⑦ 住宅購入 ══════════════════════════════ */}
         <div style={S.section}>
-          <div style={S.sectionTitle}>🏠 住宅購入</div>
+          <div style={S.sectionTitle}><SvgIcon name="house" size={15} /> 住宅購入</div>
 
           <HousingSection form={form} setForm={setForm} currentAge={currentAge} />
         </div>
@@ -1691,16 +2034,18 @@ export const InputScreen = ({ onBack, onNext }) => {
       {/* ── 固定フッターボタン ── */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
-        padding: '14px 20px 32px',
+        padding: '14px 20px',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 20px)',
         background: 'rgba(249,250,251,0.96)', backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)', borderTop: `1px solid ${C.border}`,
+        boxShadow: '0 -4px 16px rgba(0,0,0,0.06)',
       }}>
         <button onClick={handleNext} style={{
           width: '100%', maxWidth: 440, display: 'block', margin: '0 auto',
-          padding: '17px', borderRadius: 999, border: 'none',
+          padding: '18px 20px', borderRadius: 14, border: 'none',
           background: `linear-gradient(135deg, ${C.green}, ${C.greenDark})`,
           color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer',
-          letterSpacing: '0.08em', boxShadow: `0 8px 24px ${C.green}40`,
+          letterSpacing: '0.04em', boxShadow: `0 1px 6px rgba(34,197,94,0.28)`,
         }}>
           シミュレーションを開始する
         </button>

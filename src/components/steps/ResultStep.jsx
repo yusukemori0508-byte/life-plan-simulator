@@ -30,7 +30,7 @@ const KpiCard = ({ icon, label, value, sub, color = COLORS.primary }) => (
     borderLeft: `4px solid ${color}`,
     boxShadow: `0 2px 8px ${color}15`,
   }}>
-    <div style={{ fontSize: 22, marginBottom: 5 }}>{icon}</div>
+    <div style={{ height: 4 }} />
     <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 5, fontWeight: 500 }}>{label}</div>
     <div style={{ fontSize: 18, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
     {sub && <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 5 }}>{sub}</div>}
@@ -64,13 +64,13 @@ const SummaryTab = ({ rows, stats, form, diagnosis, score, rank, adviceList }) =
       }}>
         <ProgressRing score={score} rank={rank} size={90} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, color: COLORS.textMuted, fontWeight: 600, marginBottom: 3 }}>🌳 ライフプランスコア</div>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, fontWeight: 600, marginBottom: 3 }}>ライフプランスコア</div>
           <div style={{ fontSize: 24, fontWeight: 800, color: rank.color, lineHeight: 1 }}>{rank.label}</div>
           <div style={{ fontSize: 13, color: COLORS.textMuted, marginTop: 6, lineHeight: 1.5 }}>
-            {score >= 80 ? '🎉 素晴らしい計画です！木がしっかり育っています。' :
-             score >= 60 ? '🌿 概ね良好。さらに伸ばせる余地があります。' :
-             score >= 40 ? '🌱 いくつかリスクがあります。改善提案を確認してみましょう。' :
-             '⚠️ 早急な対策が必要です。改善提案を参照してください。'}
+            {score >= 80 ? '素晴らしい計画です！' :
+             score >= 60 ? '概ね良好。さらに伸ばせる余地があります。' :
+             score >= 40 ? 'いくつかリスクがあります。改善提案を確認してみましょう。' :
+             '早急な対策が必要です。改善提案を参照してください。'}
           </div>
         </div>
       </div>
@@ -115,7 +115,7 @@ const SummaryTab = ({ rows, stats, form, diagnosis, score, rank, adviceList }) =
 
       {/* 診断トップ5 */}
       <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-        📋 診断結果
+        診断結果
       </div>
       {diagnosis.slice(0, 5).map((d) => (
         <DiagnosisCard key={d.id} diagnosis={d} />
@@ -236,7 +236,7 @@ const EducationTab = ({ rows, form }) => {
   if (eduRows.length === 0) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>📚</div>
+        <div style={{ fontSize: 40, marginBottom: 12, color: '#d1d5db' }}>—</div>
         <div>教育費が発生するイベントがありません</div>
       </div>
     );
@@ -324,7 +324,7 @@ const DetailTab = ({ rows }) => {
         </tbody>
       </table>
       <div style={{ fontSize: 11, color: '#9ca3af', padding: '8px 16px' }}>
-        ※ 黄色背景行は退職後。単位: 万円。
+        * 黄色背景行は退職後。単位: 万円。
       </div>
     </div>
   );
@@ -413,18 +413,18 @@ const AdviceTab = ({ score, rank, adviceList, diagnosis }) => (
     {adviceList.length > 0 ? (
       <>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-          💡 改善できる項目
+          改善できる項目
         </div>
         {adviceList.map((a) => <AdviceCard key={a.id} advice={a} />)}
       </>
     ) : (
       <div style={{ textAlign: 'center', padding: '24px 0', color: '#6b7280', fontSize: 14 }}>
-        🎉 現在の計画は最適です！
+        現在の計画は最適です！
       </div>
     )}
 
     <div style={{ marginTop: 16, fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-      📋 全診断項目
+      全診断項目
     </div>
     {diagnosis.map((d) => <DiagnosisCard key={d.id} diagnosis={d} />)}
   </div>

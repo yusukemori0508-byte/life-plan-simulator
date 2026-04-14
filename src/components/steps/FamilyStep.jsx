@@ -5,7 +5,7 @@ import { calcTotalEducationCostPerChild, fmtMan, genId, safeNum } from '../../ut
 
 // ★ EDUCATION_PRESETS は配列: [{ id, label, icon, description, settings, totalEstimate }, ...]
 
-const CHILD_ICONS = ['👦', '👧', '🧒', '👼', '🐣', '⭐'];
+const CHILD_COLORS = ['#4CAF7A', '#e8854a', '#5a9fd4', '#8b5cf6', '#f59e0b', '#ec4899'];
 
 const st = {
   wrap: { padding: '16px 16px 8px' },
@@ -24,15 +24,6 @@ const st = {
   },
   childTitle: { fontSize: 14, fontWeight: 600, color: '#374151', display: 'flex', alignItems: 'center', gap: 6 },
   deleteBtn:  { background: '#fee2e2', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 12, color: '#dc2626', cursor: 'pointer' },
-  iconPicker: { display: 'flex', gap: 6, marginBottom: 10 },
-  iconBtn: (selected) => ({
-    fontSize: 22,
-    background: selected ? '#ede9fe' : '#fff',
-    border: `2px solid ${selected ? '#8b5cf6' : '#e5e7eb'}`,
-    borderRadius: 8,
-    padding: '4px 6px',
-    cursor: 'pointer',
-  }),
   eduCostBadge: {
     display: 'inline-flex', alignItems: 'center', gap: 4,
     background: '#dbeafe', borderRadius: 8, padding: '4px 10px',
@@ -55,23 +46,16 @@ const ChildCard = ({ child, index, onChange, onDelete }) => {
   // ★ EDUCATION_PRESETS は配列なので .map() でオプション生成
   const eduOptions = EDUCATION_PRESETS.map((p) => ({ value: p.id, label: p.label }));
 
+  const dotColor = CHILD_COLORS[index % CHILD_COLORS.length];
+
   return (
     <div style={st.childCard}>
       <div style={st.childHeader}>
         <div style={st.childTitle}>
-          <span>{child.icon || '👦'}</span>
+          <div style={{ width: 16, height: 16, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
           <span>子ども {index + 1}</span>
         </div>
         <button style={st.deleteBtn} onClick={onDelete}>削除</button>
-      </div>
-
-      {/* アイコン選択 */}
-      <div style={st.iconPicker}>
-        {CHILD_ICONS.map((ic) => (
-          <button key={ic} style={st.iconBtn(child.icon === ic)} onClick={() => onChange('icon', ic)}>
-            {ic}
-          </button>
-        ))}
       </div>
 
       <NumberStepper
@@ -93,7 +77,7 @@ const ChildCard = ({ child, index, onChange, onDelete }) => {
       />
 
       <div style={st.eduCostBadge}>
-        📚 推定教育費合計: {fmtMan(totalCost)}万円
+        推定教育費合計: {fmtMan(totalCost)}万円
       </div>
     </div>
   );
@@ -103,7 +87,7 @@ export const FamilyStep = ({ form, onChange, errors = {} }) => {
   const children = Array.isArray(form.children) ? form.children : [];
 
   const handleAddChild = () => {
-    const newChild = { id: genId(), currentAge: 0, educationPreset: 'public', icon: '👦' };
+    const newChild = { id: genId(), currentAge: 0, educationPreset: 'public', icon: '●' };
     onChange('children', [...children, newChild]);
   };
 

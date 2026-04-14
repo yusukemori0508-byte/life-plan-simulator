@@ -328,13 +328,13 @@ export const STEPS = [
 // 結果タブ
 // ────────────────────────────────────────────────
 export const RESULT_TABS = [
-  { id: 'summary',   label: 'サマリー', icon: '📋' },
-  { id: 'assets',    label: '資産推移', icon: '💹' },
-  { id: 'cashflow',  label: '収支推移', icon: '💰' },
-  { id: 'education', label: '教育費',   icon: '🎓' },
-  { id: 'detail',    label: '詳細表',   icon: '📄' },
-  { id: 'scenario',  label: 'シナリオ', icon: '🔀' },
-  { id: 'advice',    label: '改善提案', icon: '💡' },
+  { id: 'summary',   label: 'サマリー' },
+  { id: 'assets',    label: '資産推移' },
+  { id: 'cashflow',  label: '収支推移' },
+  { id: 'education', label: '教育費'   },
+  { id: 'detail',    label: '詳細表'   },
+  { id: 'scenario',  label: 'シナリオ' },
+  { id: 'advice',    label: '改善提案' },
 ];
 
 // ────────────────────────────────────────────────

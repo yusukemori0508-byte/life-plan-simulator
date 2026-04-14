@@ -69,7 +69,7 @@ const describeArc = (cx, cy, r, startAngle, endAngle) => {
  * @param {boolean}         [compact] - コンパクト表示（InputScreen 上部向け）
  * @param {string}          [label]  - 上部ラベル（デフォルト: "生活余裕度"）
  */
-export const LifeGauge = ({ gauge = 50, prev, compact = false, label = '生活安全度' }) => {
+export const LifeGauge = ({ gauge = 50, prev, compact = false, label = '家計安全度' }) => {
   injectStyles();
 
   const prevRef    = React.useRef(gauge);

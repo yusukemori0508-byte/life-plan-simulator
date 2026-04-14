@@ -322,7 +322,7 @@ export const PresetScreen = ({ onSelect, hasSavedData, onResume, lastSaved }) =>
               letterSpacing: 2.4, marginBottom: 8,
               textShadow: '0 1px 6px rgba(255,255,255,0.72)',
             }}>
-              🌿 Life Plan Simulator
+              Life Plan Simulator
             </div>
             <div style={{
               fontSize: 33, fontWeight: 900, color: '#122a1a',
@@ -356,7 +356,7 @@ export const PresetScreen = ({ onSelect, hasSavedData, onResume, lastSaved }) =>
           transition: 'opacity 0.40s ease 0.32s',
           zIndex: 5, pointerEvents: 'none',
         }}>
-          <div style={{ fontSize: 20, lineHeight: 1 }}>🌿</div>
+          <div style={{ fontSize: 20, lineHeight: 1, color: '#2d6b46' }}>■</div>
           <div style={{
             fontSize: 11, fontWeight: 700, color: '#122a1a',
             letterSpacing: 1.2,
@@ -400,7 +400,7 @@ export const PresetScreen = ({ onSelect, hasSavedData, onResume, lastSaved }) =>
               boxShadow: '0 3px 14px rgba(255,169,77,0.12)',
               animation: 'fadeUp 0.5s ease 0.38s both', opacity: 0,
             }}>
-              <span style={{ fontSize: 22, flexShrink: 0 }}>🌱</span>
+              <span style={{ fontSize: 14, flexShrink: 0, color: '#4a9e6b', fontWeight: 800 }}>◎</span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#2F4F3E' }}>前回の続きがあります</div>
                 <div style={{ fontSize: 10, color: '#8aab98', marginTop: 2 }}>{lastSaved || '不明'}</div>
@@ -472,7 +472,7 @@ export const PresetScreen = ({ onSelect, hasSavedData, onResume, lastSaved }) =>
             textAlign: 'center', padding: '22px 16px 0',
             color: '#b8c8b0', fontSize: 10, lineHeight: 2,
           }}>
-            ※ 本シミュレーターは概算です。重要な判断は専門家にご相談ください。
+            * 本シミュレーターは概算です。重要な判断は専門家にご相談ください。
           </div>
         </div>
       )}

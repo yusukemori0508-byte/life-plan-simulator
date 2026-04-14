@@ -193,16 +193,27 @@ export const profileToSimForm = (profile, selectedChoices = []) => {
     ? Math.max(0, safeNum(p.downPayment, Math.round(propertyPrice * HOUSING_DEFAULTS.downPayRatio)))
     : 0;
 
-  const hasSpouse        = p.lifeType !== 'single' && safeNum(p.spouseIncome, 0) > 0;
+  // 配偶者の存在は lifeType で判定（収入0=専業主婦/夫・育休中も配偶者ありとして扱う）
+  // ※収入0でも国民年金（基礎部分）の計算に含まれるため、single 以外は常に hasSpouse=true
+  const hasSpouse        = p.lifeType !== 'single';
   const spouseIncGross   = hasSpouse ? safeNum(p.spouseIncome, 0) : 0;
   // 配偶者年齢: 本人-2歳想定（プロフィールに spouseAge がなければ）
   const spouseAge        = safeNum(p.spouseAge, safeNum(p.currentAge, 30) - 2);
 
   // ── 手取りベース変換（所得税 + 社会保険の概算控除） ────────
   const selfIncomeNet   = Math.round(Math.max(0, selfIncome) * calcNetRatio(selfIncome));
+  // 育休・産休中は社会保険料が免除されるため、入力値をそのまま手取りとして扱う
   const spouseIncomeNet = spouseIncGross > 0
-    ? Math.round(spouseIncGross * calcNetRatio(spouseIncGross))
+    ? (p.spouseOnParentalLeave
+        ? spouseIncGross
+        : Math.round(spouseIncGross * calcNetRatio(spouseIncGross)))
     : 0;
+  // 復職後の年収（育休中など現在の収入と復職後の収入が異なる場合に使用）
+  // spouseReturnIncome が入力されていればそれを使い、なければ spouseIncomeNet にフォールバック
+  const spouseReturnIncGross = safeNum(p.spouseReturnIncome, spouseIncGross);
+  const spouseReturnIncomeNet = spouseReturnIncGross > 0
+    ? Math.round(spouseReturnIncGross * calcNetRatio(spouseReturnIncGross))
+    : spouseIncomeNet;
 
   // ── 住居費（家賃）を生活費から分離 ────────────────────────
   // expHousing = ユーザーが入力した現在の家賃・住居費（ローン除く）
@@ -223,7 +234,7 @@ export const profileToSimForm = (profile, selectedChoices = []) => {
   const existingLoans = Array.isArray(p.existingLoans) ? p.existingLoans : [];
   for (const loan of existingLoans) {
     const loanEndAge  = safeNum(loan.endAge, safeNum(p.currentAge, 30) + 5);
-    const annualCost  = safeNum(loan.monthlyPayment, 0) * 12;
+    const annualCost  = safeNum(loan.monthlyPayment, 0) / 10 * 12; // 千円→万円変換
     if (annualCost <= 0) continue;
     for (let lAge = safeNum(p.currentAge, 30); lAge <= loanEndAge; lAge++) {
       extraLifeEvents.push({
@@ -304,9 +315,9 @@ export const profileToSimForm = (profile, selectedChoices = []) => {
     hasSpouse,
     spouseAge,
     spouseIncome:             spouseIncomeNet,              // 手取りベース
-    spouseIsWorking:          hasSpouse,
+    spouseIsWorking:          hasSpouse && spouseIncGross > 0, // 収入がある場合のみ就労中
     spouseReturnToWorkAge:    safeNum(p.spouseReturnAge, spouseAge + 3),
-    spouseReturnToWorkIncome: spouseIncomeNet,              // 手取りベース
+    spouseReturnToWorkIncome: spouseReturnIncomeNet,        // 復職後の手取りベース（育休中は現在収入と別管理）
     children,
 
     // ── 収入（手取りベース） ───────────────────────────────
@@ -457,7 +468,7 @@ export const calcExplanationReasons = (profileData, simPartial, gaugeResult) => 
   // ── 既存借入 ────────────────────────────────────────────
   const existingLoans = Array.isArray(p.existingLoans) ? p.existingLoans : [];
   if (existingLoans.length > 0) {
-    const totalMonthly = existingLoans.reduce((sum, l) => sum + safeNum(l.monthlyPayment, 0), 0);
+    const totalMonthly = existingLoans.reduce((sum, l) => sum + safeNum(l.monthlyPayment, 0) / 10, 0); // 千円→万円
     const netMonthly   = totalNet / 12;
     const loanRatio    = netMonthly > 0 ? totalMonthly / netMonthly : 0;
 
@@ -750,6 +761,9 @@ export const runFullSimulation = (profileData, selectedChoices = []) => {
   // 6. 住宅購入詳細分析
   const housingDetail = calcHousingDetail(rows, profileData);
 
+  // 6.5. 4指標安全判定
+  const fourIndicators = calcFourIndicators(profileData, rows, form, housingDetail);
+
   // 7. MVP 安全判定サマリー（ResultScreen 向け）
   const safetySummaryBase = calcSafetySummary(
     { collapseAge, minAsset, summary, overallLevel },
@@ -814,6 +828,7 @@ export const runFullSimulation = (profileData, selectedChoices = []) => {
     riskPoints,
     gaugeResult,
     housingDetail,
+    fourIndicators,
     safetySummary,
     pensionInfo,
   };
@@ -872,8 +887,8 @@ export const calcHousingDetail = (rows, profileData) => {
   const purchaseRow       = rows.find((r) => r.age === purchaseAge);
   const savingsAtPurchase = purchaseRow?.totalAssets ?? null;
 
-  // ② 購入後5年間の最低資産ライン
-  const post5Rows     = rows.filter((r) => r.age > purchaseAge && r.age <= purchaseAge + 5);
+  // ② 購入後5年間の最低資産ライン（購入年を含む）
+  const post5Rows     = rows.filter((r) => r.age >= purchaseAge && r.age <= purchaseAge + 5);
   const minAssetPost5 = post5Rows.length > 0
     ? Math.min(...post5Rows.map((r) => r.totalAssets))
     : null;
@@ -908,7 +923,7 @@ export const calcHousingDetail = (rows, profileData) => {
   const existingLoanOverlapAmt = existingLoans.reduce((sum, l) => {
     const rem = Number(l.remainingMonths ?? 0);
     const yearsUntilPurchase = Math.max(0, purchaseAge - currentAge);
-    if (rem > yearsUntilPurchase * 12) return sum + (Number(l.monthlyPayment) || 0);
+    if (rem > yearsUntilPurchase * 12) return sum + (Number(l.monthlyPayment) || 0) / 10; // 千円→万円
     return sum;
   }, 0);
   const existingLoanOverlap = existingLoanOverlapAmt > 0 ? existingLoanOverlapAmt : null;
@@ -942,9 +957,10 @@ export const calcHousingDetail = (rows, profileData) => {
     // 資産状況
     savingsAtPurchase,          // 頭金支払い後の資産残高（rows から）
     minAssetPost5,              // 購入後5年の最低資産（万円）
-    savings,                    // 現在貯蓄
-    downPaymentTarget,          // 推奨頭金（年収×20%）
-    hasDownPayment,             // 頭金余力あり？
+    savings,                    // 現在貯蓄（profileData.currentSavings）
+    assetsBeforePurchase,       // 購入前年末時点の資産（頭金判定の実際の基準値）
+    downPaymentTarget,          // 推奨頭金（物件価格の10%）
+    hasDownPayment,             // 頭金余力あり？（assetsBeforePurchase で判定）
     downPaymentShortfall,       // 不足額（万円）
     // 近接リスク
     nearbyChildren,             // [{index, birthAge, diff}]
@@ -953,6 +969,305 @@ export const calcHousingDetail = (rows, profileData) => {
     existingLoanOverlap,        // 購入時点に残る既存借入月返済合計（万円/月）、なければ null
     nearbyEducation,            // [{age, label}] 購入±3年以内の高校/大学入学
   };
+};
+
+// ─────────────────────────────────────────────────────────────
+// 4指標安全判定システム
+// ─────────────────────────────────────────────────────────────
+export const calcFourIndicators = (profileData, rows, form, housingDetail) => {
+  const monthlyExpense = safeNum(profileData.monthlyExpense, 20);
+  const currentSavings = safeNum(profileData.currentSavings, 0);
+  const selfInc        = safeNum(profileData.selfIncome,        0);
+  const spouseInc      = safeNum(profileData.spouseIncome,      0);
+  const invest         = safeNum(profileData.monthlyInvestment, 0);
+  const currentAge     = safeNum(profileData.currentAge,       30);
+  const lifespan       = safeNum(profileData.lifespan,         90);
+  const retirementAge  = safeNum(profileData.retirementAge,    65);
+
+  const netSelf   = selfInc   > 0 ? selfInc   * calcNetRatio(selfInc)   : 0;
+  const netSpouse = spouseInc > 0 ? spouseInc * calcNetRatio(spouseInc) : 0;
+  const totalNet  = netSelf + netSpouse;
+
+  const annualExpense = (monthlyExpense + MONTHLY_BUFFER) * 12;
+  const annualInvest  = invest * 12;
+  const annualSurplus = totalNet - annualExpense - annualInvest;
+  const monthlySurplus = annualSurplus / 12;
+  const emergencyMonths = monthlyExpense > 0 ? currentSavings / monthlyExpense : 0;
+  const collapseAge = calcCollapseAge(rows);
+
+  // ── 1. 家計安全度 ──────────────────────────────────────────
+  // A: 毎月収支余力（25pt）
+  const scoreA =
+    annualSurplus >= 120 ? 25 :
+    annualSurplus >=  80 ? 20 :
+    annualSurplus >=  40 ? 15 :
+    annualSurplus >=   1 ?  8 : 0;
+
+  // B: 貯蓄バッファ（25pt）
+  const scoreB =
+    emergencyMonths >= 12 ? 25 :
+    emergencyMonths >=  9 ? 20 :
+    emergencyMonths >=  6 ? 15 :
+    emergencyMonths >=  3 ?  8 : 0;
+
+  // C: 大型イベント耐性（25pt）— 現役期間の最低資産
+  // 退職後の取り崩しは scoreD（老後余力）で評価するため、現役期間のみを対象とする
+  const workRows = rows.filter(r => r.age >= currentAge && r.age < retirementAge);
+  const workMinAsset = workRows.length > 0
+    ? Math.min(...workRows.map(r => r.totalAssets))
+    : currentSavings;
+  // 全期間最低（longTermRisk 表示用として別途保持）
+  const allMinAsset = rows.length > 0
+    ? Math.min(...rows.map(r => r.totalAssets))
+    : currentSavings;
+  const minAssetMonths = monthlyExpense > 0 ? workMinAsset / monthlyExpense : 0;
+  const scoreC =
+    minAssetMonths >= 12 ? 25 :
+    minAssetMonths >=  9 ? 20 :
+    minAssetMonths >=  6 ? 15 :
+    minAssetMonths >=  3 ?  8 :
+    workMinAsset   >   0 ?  4 : 0;  // 一時的な薄さでも正の資産を維持していれば最低4点
+
+  const workMinAssetRow = workRows.reduce(
+    (min, r) => (r.totalAssets < (min?.totalAssets ?? Infinity) ? r : min),
+    null,
+  );
+  const workMinAssetAge = workMinAssetRow?.age ?? null;
+
+  // D: 老後余力（25pt）
+  const retireMonthlyExp = form.retireMonthlyExpense ?? monthlyExpense;
+  const annualRetireExp  = retireMonthlyExp * 12;
+  const row90   = rows.find(r => r.age >= 90) ?? rows[rows.length - 1];
+  const asset90 = row90?.totalAssets ?? 0;
+  let scoreD;
+  if (collapseAge === null) {
+    scoreD = asset90 > annualRetireExp * 5 ? 25 : 20;
+  } else if (collapseAge >= 85) {
+    scoreD = 15;
+  } else if (collapseAge >= 80) {
+    scoreD = 8;
+  } else {
+    scoreD = 0;
+  }
+
+  // 老後余力ペナルティ：scoreD が低い場合は合計スコアに上限をかける
+  // scoreD = 0（80歳未満で枯渇） → 上限55点（要注意止まり）
+  // scoreD ≤ 8（85歳未満で枯渇）→ 上限65点（概ね安定に入れない）
+  const rawScore = scoreA + scoreB + scoreC + scoreD;
+  const scoreCap = scoreD === 0 ? 55 : scoreD <= 8 ? 65 : 100;
+  const householdScore = Math.min(rawScore, scoreCap);
+
+  // 判定閾値：0-40 要見直し / 41-65 要注意 / 66-80 概ね安定 / 81-100 安全圏
+  const hsStatus  = householdScore >= 81 ? '安全圏' : householdScore >= 66 ? '概ね安定' : householdScore >= 41 ? '要注意' : '要見直し';
+  const hsColor   = householdScore >= 81 ? '#16a34a' : householdScore >= 66 ? '#65a30d' : householdScore >= 41 ? '#d97706' : '#dc2626';
+  const hsBg      = householdScore >= 81 ? '#f0fdf4' : householdScore >= 66 ? '#f7fee7' : householdScore >= 41 ? '#fffbeb' : '#fef2f2';
+  const hsMessage = householdScore >= 81
+    ? '収支・貯蓄ともに安定しています。このペースを維持しましょう'
+    : householdScore >= 66
+    ? '概ね安定しています。住宅・教育費など大型イベント前に再確認を'
+    : householdScore >= 41
+    ? '収支の余裕に課題があります。支出か積立の見直しを検討してください'
+    : '家計バランスの改善が必要です。まず支出から見直しましょう';
+
+  // プラス要因リスト（表示用）
+  const hsPlusFactors = [];
+  if (annualSurplus >= 120) hsPlusFactors.push({ icon: '✓', text: `年間収支黒字 +${Math.round(annualSurplus)}万円` });
+  else if (annualSurplus >= 40) hsPlusFactors.push({ icon: '✓', text: `年間収支 +${Math.round(annualSurplus)}万円の黒字` });
+  if (emergencyMonths >= 6) hsPlusFactors.push({ icon: '✓', text: `生活防衛資金 ${Math.round(emergencyMonths * 10) / 10}ヶ月分` });
+  else if (emergencyMonths >= 3) hsPlusFactors.push({ icon: '✓', text: `貯蓄バッファ ${Math.round(emergencyMonths * 10) / 10}ヶ月分あり` });
+  if (invest > 0) hsPlusFactors.push({ icon: '✓', text: `月${invest}万円の積立習慣（長期複利）` });
+  if (collapseAge === null) hsPlusFactors.push({ icon: '✓', text: `${lifespan}歳まで資産枯渇なし` });
+
+  // マイナス要因リスト（表示用）— どのイベントが scoreC に影響したか
+  const hsMinusFactors = [];
+  if (scoreC < 20) {
+    if (workMinAssetAge !== null) {
+      hsMinusFactors.push({ icon: '!', text: `${workMinAssetAge}歳頃に資産の谷（${Math.round(workMinAsset)}万円）` });
+    }
+  }
+  if (scoreA < 15) hsMinusFactors.push({ icon: '!', text: `年間収支余裕が薄い（年間${Math.round(annualSurplus)}万円）` });
+  if (scoreB < 8)  hsMinusFactors.push({ icon: '!', text: `貯蓄バッファが不足（${Math.round(emergencyMonths * 10) / 10}ヶ月分）` });
+  if (scoreD === 0) hsMinusFactors.push({ icon: '!', text: `老後資産が80歳未満で枯渇する見込みです` });
+  else if (scoreD <= 8) hsMinusFactors.push({ icon: '!', text: `老後資産が85歳未満で枯渇する見込みです` });
+
+  const householdSafety = {
+    score: householdScore,
+    scoreA, scoreB, scoreC, scoreD,
+    annualSurplus,
+    monthlySurplus,
+    emergencyMonths,
+    minAssetMonths,
+    allMinAsset,
+    workingMinAsset: workMinAsset,
+    workingMinAssetAge: workMinAssetAge,
+    plusFactors: hsPlusFactors,
+    minusFactors: hsMinusFactors,
+    status:  hsStatus,
+    color:   hsColor,
+    bg:      hsBg,
+    message: hsMessage,
+  };
+
+  // ── 2. 生活継続性 ─────────────────────────────────────────
+  // A: 足元の毎月収支（40pt）
+  const lcA =
+    monthlySurplus >= 10 ? 40 :
+    monthlySurplus >=  5 ? 30 :
+    monthlySurplus >=  2 ? 20 :
+    monthlySurplus >=  0 ? 10 : 0;
+
+  // B: 直近イベント耐性（30pt）
+  const nearRows = rows.filter(r => r.age >= currentAge && r.age <= currentAge + 3);
+  const nearEventTotal = nearRows.reduce((s, r) => s + (r.eventCost ?? 0) + (r.downCost ?? 0), 0);
+  const currentRowIncome = rows.find(r => r.age === currentAge)?.totalIncome ?? totalNet;
+  const nearBurdenRatio  = currentRowIncome > 0 ? nearEventTotal / (currentRowIncome * 3) : 0;
+  const lcB =
+    nearBurdenRatio < 0.10 ? 30 :
+    nearBurdenRatio < 0.25 ? 20 :
+    nearBurdenRatio < 0.50 ? 10 : 0;
+
+  // C: 生活防衛資金（30pt）
+  const lcC =
+    emergencyMonths >= 12 ? 30 :
+    emergencyMonths >=  6 ? 20 :
+    emergencyMonths >=  3 ? 10 : 0;
+
+  const livingScore = lcA + lcB + lcC;
+  const lcLevel  = livingScore >= 80 ? '安定' : livingScore >= 60 ? 'やや注意' : livingScore >= 40 ? '余裕薄め' : '継続に注意';
+  const lcColor  = livingScore >= 80 ? '#16a34a' : livingScore >= 60 ? '#d97706' : livingScore >= 40 ? '#ea580c' : '#dc2626';
+  const lcBg     = livingScore >= 80 ? '#f0fdf4' : livingScore >= 60 ? '#fffbeb' : livingScore >= 40 ? '#fff7ed' : '#fef2f2';
+  const lcBorder = livingScore >= 80 ? '#bbf7d0' : livingScore >= 60 ? '#fde68a' : livingScore >= 40 ? '#fed7aa' : '#fecaca';
+
+  const lcReasons = [];
+  if (lcA < 30) {
+    if (monthlySurplus < 0) lcReasons.push('毎月の収支が赤字');
+    else lcReasons.push(`毎月の収支余裕が約${Math.round(monthlySurplus * 10) / 10}万円`);
+  }
+  if (lcB < 20 && nearEventTotal > 0) {
+    lcReasons.push(`直近3年に約${Math.round(nearEventTotal)}万円の大型支出`);
+  }
+  if (lcC < 20) {
+    lcReasons.push(`生活防衛資金が約${Math.round(emergencyMonths * 10) / 10}ヶ月分`);
+  }
+
+  const livingContinuity = {
+    score: livingScore,
+    scoreA: lcA, scoreB: lcB, scoreC: lcC,
+    level:  lcLevel,
+    color:  lcColor,
+    bg:     lcBg,
+    border: lcBorder,
+    reasons: lcReasons,
+  };
+
+  // ── 3. 長期破綻リスク ──────────────────────────────────────
+  const row85   = rows.find(r => r.age === 85);
+  const asset85 = row85?.totalAssets ?? 0;
+
+  let ltRisk, ltLabel, ltDesc;
+  if (collapseAge === null) {
+    if (row85 != null && asset85 < annualRetireExp * 2 && asset85 >= 0) {
+      ltRisk  = 'caution';
+      ltLabel = '注意';
+      ltDesc  = `${lifespan}歳まで維持の見込みですが、85歳頃の資産残高が薄め`;
+    } else if (asset85 < 0 || asset90 < 0) {
+      ltRisk  = 'caution';
+      ltLabel = '注意';
+      ltDesc  = `長期では資産が薄くなる時期があります`;
+    } else {
+      ltRisk  = 'none';
+      ltLabel = 'なし';
+      ltDesc  = `${lifespan}歳まで金融資産がプラスを維持`;
+    }
+  } else if (collapseAge >= 85) {
+    ltRisk  = 'caution';
+    ltLabel = '注意';
+    ltDesc  = `${collapseAge}歳頃に資産が枯渇する見込み`;
+  } else {
+    ltRisk  = 'high';
+    ltLabel = '高い';
+    ltDesc  = `${collapseAge}歳で資産が枯渇する見込み（早期対策が必要）`;
+  }
+
+  const retireRow      = rows.find(r => r.age === retirementAge);
+  const retirementAsset = retireRow?.totalAssets ?? 0;
+
+  const retireRows   = rows.filter(r => r.age >= retirementAge);
+  const deficitRows  = retireRows.filter(r => (r.cashflow ?? 0) < 0);
+  const annualDeficit = deficitRows.length > 0
+    ? Math.abs(Math.round(deficitRows.reduce((s, r) => s + (r.cashflow ?? 0), 0) / deficitRows.length))
+    : 0;
+
+  const minAssetRow = rows.reduce(
+    (min, r) => (r.totalAssets < (min?.totalAssets ?? Infinity) ? r : min),
+    null,
+  );
+
+  const longTermRisk = {
+    risk:   ltRisk,
+    label:  ltLabel,
+    desc:   ltDesc,
+    collapseAge,
+    retirementAsset,
+    minAsset:    allMinAsset,
+    minAssetAge: minAssetRow?.age ?? null,
+    annualDeficit,
+    asset85,
+    asset90,
+  };
+
+  // ── 4. 住宅購入判定 ──────────────────────────────────────
+  let housingJudgment = null;
+  if (housingDetail) {
+    const { repaymentBurden, savingsAtPurchase, minAssetPost5 } = housingDetail;
+
+    // A: 返済比率
+    const ratingA =
+      repaymentBurden === null ? 'unknown' :
+      repaymentBurden  < 20   ? 'good'    :
+      repaymentBurden  < 25   ? 'ok'      :
+      repaymentBurden  < 30   ? 'caution' : 'bad';
+
+    // B: 頭金余力（購入後残高が生活費何ヶ月分）
+    const savingsMonths = (savingsAtPurchase !== null && monthlyExpense > 0)
+      ? savingsAtPurchase / monthlyExpense
+      : 0;
+    const ratingB =
+      savingsMonths >= 6 ? 'good'    :
+      savingsMonths >= 3 ? 'caution' : 'bad';
+
+    // C: 購入後5年最低資産
+    const ratingC =
+      minAssetPost5 === null          ? 'unknown' :
+      minAssetPost5 > monthlyExpense * 6 ? 'good' :
+      minAssetPost5 > 0               ? 'caution' : 'bad';
+
+    const badCount    = [ratingA, ratingB, ratingC].filter(r => r === 'bad').length;
+    const cautionCount = [ratingA, ratingB, ratingC].filter(r => r === 'caution').length;
+
+    let hjLabel, hjColor, hjBg, hjBorder;
+    if (badCount >= 2 || (badCount >= 1 && cautionCount >= 1)) {
+      hjLabel = '条件見直し推奨'; hjColor = '#dc2626'; hjBg = '#fef2f2'; hjBorder = '#fecaca';
+    } else if (badCount === 1 || cautionCount >= 1) {
+      hjLabel = '慎重に確認';     hjColor = '#d97706'; hjBg = '#fffbeb'; hjBorder = '#fde68a';
+    } else {
+      hjLabel = '無理のない範囲'; hjColor = '#16a34a'; hjBg = '#f0fdf4'; hjBorder = '#bbf7d0';
+    }
+
+    housingJudgment = {
+      label:  hjLabel,
+      color:  hjColor,
+      bg:     hjBg,
+      border: hjBorder,
+      ratingA, ratingB, ratingC,
+      repaymentBurden,
+      savingsAtPurchase,
+      savingsMonths,
+      minAssetPost5,
+    };
+  }
+
+  return { householdSafety, livingContinuity, longTermRisk, housingJudgment };
 };
 
 // ─────────────────────────────────────────────────────────────

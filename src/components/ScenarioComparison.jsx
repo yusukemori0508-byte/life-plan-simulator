@@ -22,6 +22,27 @@ const C = {
   slateBg:  '#f1f5f9',
 };
 
+// ── SVGアイコン ────────────────────────────────────────────────
+const SC_PATHS = {
+  barchart: "M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z",
+  trending: "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z",
+  savings:  "M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z",
+  tag:      "M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z",
+  hourglass:"M6 2v6l2 2-2 2v6h12v-6l-2-2 2-2V2H6zm10 14.5V20H8v-3.5l2-2 2 2 2-2 2 2zm0-9l-2 2-2-2-2 2-2-2V4h8v3.5z",
+};
+const EMOJI_SC = {
+  '📊': 'barchart', '📈': 'trending', '💰': 'savings', '🏷️': 'tag', '⏳': 'hourglass',
+};
+const ScIcon = ({ emoji, size = 16, color = '#374151' }) => {
+  const key = EMOJI_SC[emoji];
+  if (!key) return <span style={{ fontSize: size }}>{emoji}</span>;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ display: 'block' }}>
+      <path d={SC_PATHS[key]} />
+    </svg>
+  );
+};
+
 // ── 住宅購入判定ラベル ────────────────────────────────────────
 const judgeHousing = (h) => {
   if (!h) return { label: '—', color: C.muted, order: -1 };
@@ -85,15 +106,35 @@ const buildScenarios = (profile) => {
       diff: { downPayment: maxDp },
     };
   } else {
-    // 頭金をこれ以上増やせない → 代替として購入価格を下げるシナリオ
-    const altPp = Math.max(1000, pp - 500);
-    downScenario = { id: 'price2-', label: `価格をさらに下げる（${altPp}万）`, icon: '🏷️', diff: { propertyPrice: altPp } };
+    // 頭金をこれ以上増やせない → 代替として購入価格をより大きく下げるシナリオ
+    // ※ price- シナリオ（-500万）と重複しないよう -1000万にする
+    const altPp = Math.max(1000, pp - 1000);
+    downScenario = { id: 'price2-', label: `価格を1000万下げる（${altPp}万）`, icon: '🏷️', diff: { propertyPrice: altPp } };
   }
 
+  // downScenario が価格引き下げ系（price2-）の場合、
+  // price-（500万下げ）と両立すると同種シナリオが重複するため除外する
+  const priceDownScenario = downScenario.id !== 'price2-'
+    ? {
+        id: 'price-', label: `価格を500万下げる`, icon: '🏷️',
+        diff: { propertyPrice: newPp },
+        note: `物件価格を500万抑えることで借入額が減り、月返済額と利子負担が軽くなります（現在${pp.toLocaleString()}万→${newPp.toLocaleString()}万）。`,
+      }
+    : null;
+
   return [
-    { id: 'later3', label: `${pa + 3}歳に購入する`, icon: '⏳', diff: { housingPurchaseAge: pa + 3 } },
-    downScenario,
-    { id: 'price-', label: `価格を500万下げる`,      icon: '🏷️', diff: { propertyPrice: newPp } },
+    {
+      id: 'later3', label: `${pa + 3}歳に購入する`, icon: '⏳',
+      diff: { housingPurchaseAge: pa + 3 },
+      note: `購入を${pa + 3}歳まで遅らせることで、その間に貯蓄・投資を継続でき、ローン開始も遅れるため購入時の手元資産が増えます。`,
+    },
+    {
+      ...downScenario,
+      note: downScenario.id === 'down+'
+        ? '頭金を増やすと借入額が減り、月返済額・利子総額が軽くなります。購入後の月々の余裕が広がります。'
+        : '物件価格を大きく抑えることで借入額が減り、月返済・利子負担が大幅に軽くなります。',
+    },
+    ...(priceDownScenario ? [priceDownScenario] : []),
   ];
 };
 
@@ -206,7 +247,22 @@ export const ScenarioComparison = ({ profileData, selectedChoices }) => {
   const activeSc = scenarios.find(s => s.id === activeId);
   const altResult = React.useMemo(() => {
     if (!activeSc) return null;
-    return runFullSimulation({ ...profileData, ...activeSc.diff }, selectedChoices);
+
+    // ── selectedChoices の selectedPrice を diff に合わせて同期する ──
+    // profileToSimForm は selectedChoices[i].selectedPrice を
+    // profileData.propertyPrice より優先するため、
+    // diff に propertyPrice が含まれる場合は housing イベントの
+    // selectedPrice も書き換えないとシナリオ差が反映されない。
+    let altChoices = selectedChoices;
+    if (activeSc.diff?.propertyPrice !== undefined) {
+      altChoices = selectedChoices.map(c =>
+        c.eventId === 'housing'
+          ? { ...c, selectedPrice: activeSc.diff.propertyPrice }
+          : c,
+      );
+    }
+
+    return runFullSimulation({ ...profileData, ...activeSc.diff }, altChoices);
   }, [activeSc, profileData, selectedChoices]);
   const altMetrics = altResult ? extractMetrics(altResult) : null;
 
@@ -228,21 +284,21 @@ export const ScenarioComparison = ({ profileData, selectedChoices }) => {
   };
 
   return (
-    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif' }}>
+    <div style={{ fontFamily: "'Noto Sans JP', -apple-system, 'Apple Color Emoji', sans-serif" }}>
 
       {/* ── シナリオ選択エリア ─────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 4, alignItems: 'flex-start' }}>
         {/* 基準プランバッジ（控えめな青グレー） */}
         <div style={{
           flex: '0 0 auto', padding: '10px 12px 8px',
           borderRadius: 12, border: '1.5px solid #cbd5e1',
           background: '#f1f5f9', textAlign: 'center', minWidth: 64,
         }}>
-          <div style={{ fontSize: 16, marginBottom: 4 }}>📊</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}><ScIcon emoji="📊" size={16} color="#64748b" /></div>
           <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', letterSpacing: '0.04em' }}>基準プラン</div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', color: C.muted, fontSize: 14, padding: '0 2px' }}>vs</div>
+        <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'center', color: C.muted, fontSize: 14, padding: '0 2px' }}>vs</div>
 
         {/* 比較シナリオボタン */}
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${scenarios.length}, 1fr)`, gap: 6, flex: 1 }}>
@@ -260,7 +316,9 @@ export const ScenarioComparison = ({ profileData, selectedChoices }) => {
                   boxShadow: isActive ? `0 2px 8px rgba(22,163,74,0.18)` : 'none',
                 }}
               >
-                <div style={{ fontSize: 16, marginBottom: 4 }}>{s.icon}</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
+                  <ScIcon emoji={s.icon} size={16} color={isActive ? C.greenDark : C.muted} />
+                </div>
                 <div style={{
                   fontSize: 10, fontWeight: 700, lineHeight: 1.35,
                   color: isActive ? C.greenDark : C.text,
@@ -295,6 +353,16 @@ export const ScenarioComparison = ({ profileData, selectedChoices }) => {
               </span>
             </div>
           ))}
+          {/* 差分要因の説明ノート */}
+          {activeSc?.note && (
+            <div style={{
+              marginTop: 4, paddingTop: 8,
+              borderTop: `1px solid ${C.border}`,
+              fontSize: 11, color: C.muted, lineHeight: 1.6,
+            }}>
+              {activeSc.note}
+            </div>
+          )}
         </div>
       )}
 

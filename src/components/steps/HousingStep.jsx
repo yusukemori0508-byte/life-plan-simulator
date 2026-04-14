@@ -29,9 +29,9 @@ const MORTGAGE_TERM_OPTIONS = [
 ];
 
 const HOUSING_TYPE_OPTIONS = [
-  { value: 'rent',           label: '🏠 賃貸' },
-  { value: 'own',            label: '🏡 持ち家（すでに購入済み）' },
-  { value: 'future_purchase', label: '🔑 将来購入予定' },
+  { value: 'rent',           label: '賃貸' },
+  { value: 'own',            label: '持ち家（すでに購入済み）' },
+  { value: 'future_purchase', label: '将来購入予定' },
 ];
 
 const st = {

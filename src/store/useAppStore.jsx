@@ -18,24 +18,24 @@ import { gaugeToTreeLevel } from '../gaugeCalc.js';
 // ─────────────────────────────────────────────────────────────
 export const DEFAULT_PROFILE = {
   // ── 基本 ─────────────────────────────────────────────────
-  currentAge:  30,
+  currentAge:  null,
   region:      'other',    // 'tokyo' | 'osaka' | 'nagoya' | 'other'
   lifeType:    'couple',   // 'single' | 'couple' | 'family'
   nickname:    '',
 
   // ── 収入 ─────────────────────────────────────────────────
-  selfIncome:        450,  // 万円/年
+  selfIncome:        null,  // 万円/年（null = 未入力）
   incomeGrowthRate:  1.5,  // %/年
-  spouseIncome:      300,  // 万円/年（0 = 配偶者なし）
+  spouseIncome:      null,  // 万円/年（null = 未入力）
   spouseReturnAge:   35,   // 配偶者が復職する年齢（配偶者の年齢基準）
 
   // ── 支出 ─────────────────────────────────────────────────
-  monthlyExpense:  20,     // 万円/月
+  monthlyExpense:  null,   // 万円/月（null = 未入力）
   educationPlan:   'public', // 'public' | 'mix_pub' | 'mix_pri' | 'private'
 
   // ── 資産 ─────────────────────────────────────────────────
-  currentSavings:      150,  // 万円
-  monthlyInvestment:     3,  // 万円/月
+  currentSavings:      null,  // 万円（null = 未入力）
+  monthlyInvestment:   null,  // 万円/月（null = 未入力）
   investmentReturn:      5,  // %/年
 
   // ── ライフイベント（予定年齢トリガー） ──────────────────
@@ -46,7 +46,7 @@ export const DEFAULT_PROFILE = {
   //   null             → 未設定
   childAges:        [null, null, null, null],
   firstChildAge:    null,    // 後方互換 — childAges[0] と同値
-  housingPurchaseAge: 35,    // null = 予定なし
+  housingPurchaseAge: null,   // null = 予定なし
   // ── 車（買替周期型） ─────────────────────────────────────
   carOwnership:    false,   // 車を保有するか
   carFirstAge:     null,    // 最初の購入予定年齢（null = 未設定）
@@ -61,8 +61,8 @@ export const DEFAULT_PROFILE = {
   existingLoans: [],
 
   // ── 住宅ローン詳細 ─────────────────────────────────────
-  propertyPrice:    3500,    // 万円（想定住宅価格）
-  downPayment:       350,    // 万円（頭金）
+  propertyPrice:    null,    // 万円（想定住宅価格）
+  downPayment:      null,    // 万円（頭金）
   mortgageRate:      1.0,    // %/年（金利）
   mortgageTerm:       35,    // 年（借入年数）
   mortgageType:  'variable', // 'fixed' | 'variable'
@@ -89,19 +89,19 @@ export const DEFAULT_PROFILE = {
   miscCostRate:  5,     // 購入諸費用率（%、登記・仲介・税など）
 
   // ── 支出カテゴリ（万円/月） ───────────────────────────────
-  expHousing:       8,    // 家賃・住居費（住宅ローン以外）
-  expUtilities:     2,    // 光熱費
-  expCommunication: 1,    // 通信費
-  expInsurance:     1.5,  // 保険料
-  expFood:          5,    // 食費
-  expDaily:         1,    // 日用品
-  expSocial:        1,    // 交際費
-  expEntertainment: 1,    // 娯楽・趣味
-  expClothing:      1,    // 衣服・美容
-  expChildcare:     0,    // 保育・教育（月次費用）
-  expCarMaint:      0,    // 車維持費
-  expMedical:       0.5,  // 医療費
-  expAnnualExtra:   20,   // 年間臨時支出（万円/年：慶弔・家電等）
+  expHousing:       null,  // 家賃・住居費（住宅ローン以外）
+  expUtilities:     null,  // 光熱費
+  expCommunication: null,  // 通信費
+  expInsurance:     null,  // 保険料
+  expFood:          null,  // 食費
+  expDaily:         null,  // 日用品
+  expSocial:        null,  // 交際費
+  expEntertainment: null,  // 娯楽・趣味
+  expClothing:      null,  // 衣服・美容
+  expChildcare:     null,  // 保育・教育（月次費用）
+  expCarMaint:      null,  // 車維持費
+  expMedical:       null,  // 医療費
+  expAnnualExtra:   null,  // 年間臨時支出（万円/年：慶弔・家電等）
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -238,6 +238,18 @@ const reducer = (state, action) => {
         resultData:      null,
       };
 
+    // ── 保存セッション復元 ───────────────────────────────
+    case 'RESTORE_SESSION': {
+      const { profileData, selectedChoices, resultData } = action.payload;
+      return {
+        ...INITIAL_STATE,
+        profileData:     profileData     ?? INITIAL_STATE.profileData,
+        selectedChoices: selectedChoices ?? [],
+        resultData:      resultData      ?? null,
+        screen:          'result',
+      };
+    }
+
     // ── 完全リセット（最初からやり直し） ─────────────────
     case 'FULL_RESET':
       return INITIAL_STATE;
@@ -298,6 +310,9 @@ export const AppProvider = ({ children }) => {
   const fullReset = useCallback(
     () => dispatch({ type: 'FULL_RESET' }), []);
 
+  const restoreSession = useCallback(
+    (payload) => dispatch({ type: 'RESTORE_SESSION', payload }), []);
+
   // ── actions オブジェクトをメモ化（不要な再レンダー防止） ─
   const actions = useMemo(() => ({
     setScreen,
@@ -313,10 +328,11 @@ export const AppProvider = ({ children }) => {
     setRanking,
     resetSimulation,
     fullReset,
+    restoreSession,
   }), [
     setScreen, setProfile, setGauge, deltaGauge, setSimAge,
     triggerEvent, setPendingEvent, selectChoice, setResult,
-    setTimeline, setRanking, resetSimulation, fullReset,
+    setTimeline, setRanking, resetSimulation, fullReset, restoreSession,
   ]);
 
   const value = useMemo(() => ({ state, actions }), [state, actions]);

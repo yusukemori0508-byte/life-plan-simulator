@@ -1,10 +1,9 @@
 :root {
-  font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', system-ui, sans-serif;
+  font-family: 'Noto Sans JP', 'Hiragino Sans',
+               'Hiragino Kaku Gothic ProN', -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #2a3d30;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

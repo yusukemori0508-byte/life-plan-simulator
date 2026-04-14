@@ -43,11 +43,11 @@ const SURPLUS_TO_GAUGE = [
 // ゲージ → 表示メッセージ（5ゾーン・前向きすぎない表現）
 // ─────────────────────────────────────────────────────────────
 export const gaugeToMessage = (gauge) => {
-  if (gauge >= 85) return '現時点では安定していますが、大きなイベント前に再確認を';     // 安全圏
-  if (gauge >= 70) return '比較的安定しています。住宅購入や教育費には注意が必要です';  // 比較的安全
-  if (gauge >= 50) return '大きな支出イベント前には必ず再確認が必要です';              // 慎重判断
-  if (gauge >= 30) return '住宅購入判断は慎重に行いましょう';                          // 要見直し
-  return '現状のままでは将来の家計が厳しくなる可能性があります';                      // 高リスク
+  if (gauge >= 85) return '収支・貯蓄ともに安定しています。このペースを維持しましょう';
+  if (gauge >= 70) return '概ね安定しています。住宅・教育費など大型イベント前に再確認を';
+  if (gauge >= 50) return '収支の余裕に課題があります。支出か積立の見直しを検討してください';
+  if (gauge >= 30) return '家計バランスの改善が必要です。まず支出から見直しましょう';
+  return '収支の改善が急務です。家計全体を見直してください';
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -88,11 +88,11 @@ export const gaugeToTreeLevel = (gauge) => {
 // ゲージ → ステータスラベル（5ゾーン: 85 / 70 / 50 / 30 境界）
 // ─────────────────────────────────────────────────────────────
 export const gaugeToStatus = (gauge) => {
-  if (gauge >= 85) return { label: '安全圏',    color: '#16a34a', bg: '#f0fdf4' };
-  if (gauge >= 70) return { label: '比較的安全', color: '#65a30d', bg: '#f7fee7' };
-  if (gauge >= 50) return { label: '慎重判断',  color: '#d97706', bg: '#fffbeb' };
-  if (gauge >= 30) return { label: '要見直し',  color: '#dc2626', bg: '#fef2f2' };
-  return                 { label: '高リスク',   color: '#991b1b', bg: '#fff1f2' };
+  if (gauge >= 85) return { label: '安全圏',  color: '#16a34a', bg: '#f0fdf4' };
+  if (gauge >= 70) return { label: '概ね安定', color: '#65a30d', bg: '#f7fee7' };
+  if (gauge >= 50) return { label: '要注意',  color: '#d97706', bg: '#fffbeb' };
+  if (gauge >= 30) return { label: '要見直し', color: '#dc2626', bg: '#fef2f2' };
+  return               { label: '要見直し',  color: '#991b1b', bg: '#fff1f2' };
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -277,7 +277,7 @@ export const calcScoreCorrections = (profile) => {
   }
   const carLoans = existingLoans.filter(l => /車|カー|自動車|car/i.test(l.label ?? ''));
   if (carLoans.length > 0) {
-    const carMonthly = carLoans.reduce((s, l) => s + (Number(l.monthlyPayment) || 0), 0);
+    const carMonthly = carLoans.reduce((s, l) => s + (Number(l.monthlyPayment) || 0) / 10, 0); // 千円→万円
     carPts += carMonthly > 3 ? 3 : 1;
     carItems.push(`車ローン残 ${Math.round(carMonthly)}万円/月`);
   }
@@ -286,7 +286,7 @@ export const calcScoreCorrections = (profile) => {
   // ④ 既存借入補正（max 8点）
   let loanPts = 0;
   const loanItems = [];
-  const totalMonthlyLoan = existingLoans.reduce((s, l) => s + (Number(l.monthlyPayment) || 0), 0);
+  const totalMonthlyLoan = existingLoans.reduce((s, l) => s + (Number(l.monthlyPayment) || 0) / 10, 0); // 千円→万円
   if (monthlyNet > 0 && totalMonthlyLoan > 0) {
     const loanBurden = totalMonthlyLoan / monthlyNet * 100;
     if (loanBurden > 20) {
@@ -325,9 +325,15 @@ export const calcInitialGauge = (profile) => {
   const netSpouse      = spouseInc > 0 ? spouseInc * calcNetRatio(spouseInc) : 0;
   const totalNetIncome = netSelf + netSpouse;
 
-  // 既存借入の月返済合計
+  // 既存借入の月返済合計（endAge を過ぎた借入は除外）
   const existingLoans    = Array.isArray(profile.existingLoans) ? profile.existingLoans : [];
-  const monthlyLoanRepay = existingLoans.reduce((sum, l) => sum + (Number(l.monthlyPayment) || 0), 0);
+  const currentAge_      = Number(profile.currentAge ?? 30);
+  const monthlyLoanRepay = existingLoans.reduce((sum, l) => {
+    const endAge = Number(l.endAge ?? 0);
+    // endAge が未設定(0) または現在年齢より大きい場合のみ加算（まだ返済中）
+    if (endAge <= 0 || endAge > currentAge_) return sum + (Number(l.monthlyPayment) || 0) / 10; // 千円→万円
+    return sum;
+  }, 0);
 
   // 支出は手取りベースで評価（臨時支出バッファ + 既存借入を加算）
   const annualExpense    = (expense + MONTHLY_BUFFER + monthlyLoanRepay) * 12;
@@ -367,6 +373,181 @@ export const calcInitialGauge = (profile) => {
     status:             gaugeToStatus(adjustedGauge),
     housingPenalty:     dampedTotal,              // 後方互換
     housingRiskReasons: housingCorr?.items ?? [], // 後方互換
+  };
+};
+
+// ─────────────────────────────────────────────────────────────
+// 年次シミュレーション行からその時点のゲージを動的計算
+//
+// simRow: { totalIncome, totalExpense, totalAssets,
+//           nisaContrib, idecoContrib, generalContrib, downCost }（年間万円）
+//
+// 採点ロジック:
+//   ① 構造的収支余剰率（投資積立・頭金を除く実生活費ベース）→ ベーススコア
+//   ② 生活防衛資金（資産÷月構造支出）→ ボーナス/ペナルティ
+//      - マイナス資産: -30
+//      - 3ヶ月未満:   -15
+//      - 6ヶ月未満:    -8
+//      - 6ヶ月以上:    +3
+//      - 12ヶ月以上:  +10
+//      - 24ヶ月以上:  +18
+//      - 36ヶ月以上:  +25
+// ─────────────────────────────────────────────────────────────
+export const calcDynamicGaugeFromRow = (simRow) => {
+  if (!simRow) return null;
+
+  const totalIncome  = Number(simRow.totalIncome  ?? 0);
+  const totalExpense = Number(simRow.totalExpense  ?? 0);
+  const totalAssets  = Number(simRow.totalAssets   ?? 0);
+
+  // 投資積立・頭金は資産移転（支出ではない）→ 除外して実生活費を計算
+  const investContrib = Number(simRow.nisaContrib    ?? 0)
+                      + Number(simRow.idecoContrib   ?? 0)
+                      + Number(simRow.generalContrib ?? 0);
+  const downCost      = Number(simRow.downCost ?? 0);
+  const structuralExp = Math.max(0, totalExpense - investContrib - downCost);
+
+  // ① 構造的収支余剰率 → ベーススコア
+  const surplus     = totalIncome - structuralExp;
+  const surplusRate = totalIncome > 0 ? surplus / totalIncome : -1;
+
+  let baseGauge = 6;
+  for (const row of SURPLUS_TO_GAUGE) {
+    if (surplusRate >= row.minRate) { baseGauge = row.gauge; break; }
+  }
+  // -10%〜-25% の中間ゾーン（一時的な収入減などで生じやすい）
+  if (surplusRate < -0.10 && surplusRate >= -0.25) baseGauge = 14;
+
+  // ② 生活防衛資金（構造的月支出の何ヶ月分を資産で賄えるか）
+  const monthlyExp      = structuralExp > 0 ? structuralExp / 12 : 1;
+  const emergencyMonths = totalAssets / monthlyExp;
+
+  let assetAdj = 0;
+  if (totalAssets < 0) {
+    assetAdj = -30;
+  } else if (emergencyMonths >= 36) {
+    assetAdj = +25;
+  } else if (emergencyMonths >= 24) {
+    assetAdj = +18;
+  } else if (emergencyMonths >= 12) {
+    assetAdj = +10;
+  } else if (emergencyMonths >= 6) {
+    assetAdj = +3;
+  } else if (emergencyMonths < 3) {
+    assetAdj = -15;
+  } else if (emergencyMonths < 6) {
+    assetAdj = -8;
+  }
+
+  const gauge = Math.max(0, Math.min(100, Math.round(baseGauge + assetAdj)));
+
+  return {
+    gauge,
+    surplus:          Math.round(surplus),
+    surplusRate,
+    surplusRatePct:   Math.round(surplusRate * 1000) / 10,
+    emergencyMonths:  Math.round(emergencyMonths * 10) / 10,
+    assetAdj,
+  };
+};
+
+// ─────────────────────────────────────────────────────────────
+// calcDynamicScoreFromRows — 4指標スコアを年齢ごとに動的計算
+//
+// ResultScreen の calcFourIndicators と同じ4指標ロジックを
+// シミュレーション行データから年次再計算する。
+//
+// 指標:
+//   A: 毎月収支余力    — その年の構造的年間黒字（投資・頭金除く）
+//   B: 貯蓄バッファ   — その時点の資産 ÷ 月生活費
+//   C: 大型イベント耐性 — 現在〜退職までの最低資産 ÷ 月生活費
+//   D: 老後余力       — 全期間の collapseAge から判定
+//
+// 老後余力ペナルティ（calcFourIndicators と同一）:
+//   scoreD=0  → 上限55点（要注意止まり）
+//   scoreD≤8  → 上限65点
+//
+// 判定閾値: 0-40 要見直し / 41-65 要注意 / 66-80 概ね安定 / 81-100 安全圏
+// ─────────────────────────────────────────────────────────────
+export const calcDynamicScoreFromRows = (simRows, currentAge, retirementAge) => {
+  if (!simRows || simRows.length === 0) return null;
+
+  const currentRow = simRows.find(r => r.age === currentAge);
+  if (!currentRow) return null;
+
+  // 月生活費（その年の実績値から逆算）
+  const monthlyExp = Math.max(1, (currentRow.livingExp ?? 0) / 12);
+
+  // ── A: 毎月収支余力（投資積立・頭金を除いた構造的黒字） ──
+  const investContrib = (currentRow.nisaContrib    ?? 0)
+                      + (currentRow.idecoContrib   ?? 0)
+                      + (currentRow.generalContrib ?? 0);
+  const downCost      = currentRow.downCost ?? 0;
+  const structuralExp = Math.max(0, (currentRow.totalExpense ?? 0) - investContrib - downCost);
+  const annualSurplus = (currentRow.totalIncome ?? 0) - structuralExp;
+
+  const scoreA =
+    annualSurplus >= 120 ? 25 :
+    annualSurplus >=  80 ? 20 :
+    annualSurplus >=  40 ? 15 :
+    annualSurplus >=   1 ?  8 : 0;
+
+  // ── B: 貯蓄バッファ（その時点の資産÷月生活費） ──
+  const totalAssets    = currentRow.totalAssets ?? 0;
+  const emergencyMonths = monthlyExp > 0 ? totalAssets / monthlyExp : 0;
+
+  const scoreB =
+    emergencyMonths >= 12 ? 25 :
+    emergencyMonths >=  9 ? 20 :
+    emergencyMonths >=  6 ? 15 :
+    emergencyMonths >=  3 ?  8 : 0;
+
+  // ── C: 大型イベント耐性（現在〜退職までの最低資産） ──
+  const futureWorkRows = simRows.filter(r => r.age >= currentAge && r.age < retirementAge);
+  const workMinAsset   = futureWorkRows.length > 0
+    ? Math.min(...futureWorkRows.map(r => r.totalAssets))
+    : totalAssets;
+  const minAssetMonths = monthlyExp > 0 ? workMinAsset / monthlyExp : 0;
+
+  const scoreC =
+    minAssetMonths >= 12 ? 25 :
+    minAssetMonths >=  9 ? 20 :
+    minAssetMonths >=  6 ? 15 :
+    minAssetMonths >=  3 ?  8 :
+    workMinAsset   >   0 ?  4 : 0;
+
+  // ── D: 老後余力（全期間のcollapseAgeから判定） ──
+  const collapseAge    = simRows.find(r => r.totalAssets < 0)?.age ?? null;
+  const retireMonthlyExp = monthlyExp * 0.82;  // 老後は18%減
+  const annualRetireExp  = retireMonthlyExp * 12;
+  const row90   = simRows.find(r => r.age >= 90) ?? simRows[simRows.length - 1];
+  const asset90 = row90?.totalAssets ?? 0;
+
+  let scoreD;
+  if (collapseAge === null) {
+    scoreD = asset90 > annualRetireExp * 5 ? 25 : 20;
+  } else if (collapseAge >= 85) {
+    scoreD = 15;
+  } else if (collapseAge >= 80) {
+    scoreD = 8;
+  } else {
+    scoreD = 0;
+  }
+
+  // ── 老後余力ペナルティ・合計スコア ──
+  const rawScore   = scoreA + scoreB + scoreC + scoreD;
+  const scoreCap   = scoreD === 0 ? 55 : scoreD <= 8 ? 65 : 100;
+  const totalScore = Math.min(rawScore, scoreCap);
+
+  // ── 判定 ──
+  const status = totalScore >= 81 ? '安全圏' : totalScore >= 66 ? '概ね安定' : totalScore >= 41 ? '要注意' : '要見直し';
+  const color  = totalScore >= 81 ? '#16a34a' : totalScore >= 66 ? '#65a30d' : totalScore >= 41 ? '#d97706' : '#dc2626';
+
+  return {
+    gauge: totalScore,
+    scoreA, scoreB, scoreC, scoreD,
+    annualSurplus, emergencyMonths, workMinAsset, collapseAge,
+    status, color,
   };
 };
 

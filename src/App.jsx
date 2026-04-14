@@ -14,6 +14,8 @@ import { InputScreen }      from './components/InputScreen.jsx';
 import { SimulationScreen } from './components/SimulationScreen.jsx';
 import { ResultScreen }     from './components/ResultScreen.jsx';
 import { ActionPage }       from './components/ActionPage.jsx';
+import { TimelineScreen }   from './components/TimelineScreen.jsx';
+import { RankingScreen }    from './components/RankingScreen.jsx';
 
 // ── 未実装画面のプレースホルダー ──────────────────────────────
 // 後続のステップで順次差し替える
@@ -141,20 +143,16 @@ const AppRouter = () => {
         />
       )}
 
-      {/* ⑥ タイムライン（実装中） */}
+      {/* ⑥ タイムライン */}
       {screen === 'timeline' && (
-        <PlaceholderScreen
-          title="タイムライン"
-          icon="🌐"
+        <TimelineScreen
           onBack={nav.back.fromTimeline}
         />
       )}
 
-      {/* ⑥ ランキング（実装中） */}
+      {/* ⑦ ランキング */}
       {screen === 'ranking' && (
-        <PlaceholderScreen
-          title="ランキング"
-          icon="🏆"
+        <RankingScreen
           onBack={nav.back.fromRanking}
         />
       )}

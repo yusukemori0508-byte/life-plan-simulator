@@ -183,7 +183,7 @@ export const IncomeStep = ({ form, onChange, errors = {} }) => {
           <span style={{ fontWeight: 700, color: '#1d4ed8' }}>{fmtMan(pension.annual)}万円/年</span>
         </div>
         <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
-          ※ 試算値。実際の年金は日本年金機構で確認ください。
+          * 試算値。実際の年金は日本年金機構で確認ください。
         </div>
       </div>
     </div>

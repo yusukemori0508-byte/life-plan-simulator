@@ -98,9 +98,18 @@ export const MVPResultScreen = ({ inputs, onBack }) => {
         opacity: revealed ? undefined : 0,
         boxSizing:'border-box',
       }}>
-        {/* 絵文字 */}
-        <div style={{ fontSize:48, lineHeight:1, textAlign:'center', marginBottom:10 }}>
-          {info.emoji}
+        {/* レベルインジケーター */}
+        <div style={{ display:'flex', justifyContent:'center', marginBottom:10 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            background: `linear-gradient(135deg, ${info.color}, ${info.color}cc)`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: `0 4px 16px ${info.color}40`,
+          }}>
+            <svg width={24} height={24} viewBox="0 0 24 24" fill="#fff">
+              <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20c9 0 11-10 11-10-.59 1.1-1.59 2.1-3 2.9A8.63 8.63 0 0 0 17 8z" />
+            </svg>
+          </div>
         </div>
 
         {/* 評価ラベル */}
@@ -130,7 +139,7 @@ export const MVPResultScreen = ({ inputs, onBack }) => {
             {fmt(result.totalAssets)}
           </div>
           <div style={{ fontSize:10, color:`${info.color}88`, marginTop:4 }}>
-            ※ 65歳時点〜90歳までの概算
+            * 65歳時点〜90歳までの概算
           </div>
         </div>
 
@@ -157,7 +166,7 @@ export const MVPResultScreen = ({ inputs, onBack }) => {
             boxShadow:`0 6px 24px ${info.color}40`,
           }}
         >
-          🌱 もう少し育てる
+          もう少し育てる
         </button>
       </div>
 
@@ -166,7 +175,7 @@ export const MVPResultScreen = ({ inputs, onBack }) => {
         padding:'20px 20px 36px',
         fontSize:10, color:'#a0b8a0', textAlign:'center', lineHeight:2,
       }}>
-        ※ 本シミュレーターは概算です。重要な判断は専門家にご相談ください。
+        * 本シミュレーターは概算です。重要な判断は専門家にご相談ください。
       </div>
     </div>
   );

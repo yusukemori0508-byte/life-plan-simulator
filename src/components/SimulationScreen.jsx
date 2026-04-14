@@ -11,7 +11,7 @@ import { useAppStore } from '../store/useAppStore.jsx';
 import { LifeGauge, GaugeDelta } from './LifeGauge.jsx';
 import { getEventsForAge, getNextEvent } from '../eventTrigger.js';
 import { CATEGORY_META } from '../eventData.js';
-import { applyGaugeDelta, gaugeToColor, gaugeToGradient, gaugeToStatus } from '../gaugeCalc.js';
+import { applyGaugeDelta, gaugeToColor, gaugeToGradient, gaugeToStatus, calcDynamicScoreFromRows } from '../gaugeCalc.js';
 import { runFullSimulation } from '../simulationEngine.js';
 import { getHousingEventOptions, getCarEventOptions } from '../eventOptions.js';
 
@@ -78,6 +78,42 @@ const getDampedDelta = (rawDelta, eventId, priorChoices) => {
 };
 
 // ─────────────────────────────────────────────────────────────
+// SVGアイコン（絵文字の代替）
+// ─────────────────────────────────────────────────────────────
+const SIM_PATHS = {
+  house:      "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z",
+  child:      "M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm9 7h-6v13h-2v-6h-2v6H9V9H3V7h18v2z",
+  car:        "M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.08 3.11H5.77L6.85 7zM19 17H5v-5h14v5zm-8-4H9v2h2v-2zm4 0h-2v2h2v-2z",
+  briefcase:  "M10 2h4c1.1 0 2 .9 2 2v2h4c1.1 0 2 .9 2 2v11c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V8c0-1.1.9-2 2-2h4V4c0-1.1.9-2 2-2zm0 2v2h4V4h-4zM4 8v11h16V8H4z",
+  bulb:       "M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z",
+  hospital:   "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z",
+  savings:    "M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z",
+  trending:   "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z",
+  chevron:    "M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z",
+  graduation: "M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z",
+  school:     "M12 3L1 9l4 2.18V15c0 3.31 4.03 6 8.5 6s8.5-2.69 8.5-6v-3.82L23 9 12 3zm0 2.24L19.16 9 12 12.76 4.84 9 12 5.24zM17 14.09c0 2.52-2.24 4.57-5 4.57s-5-2.05-5-4.57v-2.45L12 15l5-3.36v2.45z",
+};
+const EMOJI_TO_SVG = {
+  '🏠': 'house',      '👶': 'child',      '🧒': 'child',     '🚗': 'car',
+  '💼': 'briefcase',  '💡': 'bulb',       '🏥': 'hospital',
+  '💰': 'savings',    '📈': 'trending',
+  '🎓': 'graduation', '🎒': 'school',     '📚': 'school',    '🏫': 'school',
+};
+const SimIcon = ({ emoji, size = 52, color = '#374151' }) => {
+  const key = EMOJI_TO_SVG[emoji];
+  if (!key || !SIM_PATHS[key]) return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ display: 'block' }}>
+      <circle cx="12" cy="12" r="8" />
+    </svg>
+  );
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ display: 'block' }}>
+      <path d={SIM_PATHS[key]} />
+    </svg>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
 // EventCard — イベント選択モーダル
 // ─────────────────────────────────────────────────────────────
 const EventCard = ({ event, currentGauge, onSelect }) => {
@@ -112,7 +148,8 @@ const EventCard = ({ event, currentGauge, onSelect }) => {
         <div style={{
           background:   C.white,
           borderRadius: '28px 28px 0 0',
-          padding:      '12px 20px 40px',
+          padding:      '12px 20px',
+          paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0px))',
           maxHeight:    '80vh',
           overflowY:    'auto',
           boxShadow:    '0 -8px 40px rgba(0,0,0,0.18)',
@@ -125,7 +162,9 @@ const EventCard = ({ event, currentGauge, onSelect }) => {
 
           {/* アイコン + カテゴリ */}
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 52, lineHeight: 1, marginBottom: 10 }}>{event.icon}</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+              <SimIcon emoji={event.icon} size={52} color="#374151" />
+            </div>
             <div style={{
               display: 'inline-block',
               padding: '3px 12px', borderRadius: 999,
@@ -287,7 +326,7 @@ const NextEventCard = ({ nextEvent, currentAge, onJump, disabled, profile, retir
                 padding: '7px 12px', borderRadius: 10,
                 background: C.white, border: `1px solid ${C.green}25`,
               }}>
-                <span style={{ fontSize: 16, flexShrink: 0 }}>{ev.icon}</span>
+                <div style={{ flexShrink: 0 }}><SimIcon emoji={ev.icon} size={18} color="#374151" /></div>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{ev.label}</span>
                 </div>
@@ -327,7 +366,7 @@ const NextEventCard = ({ nextEvent, currentAge, onJump, disabled, profile, retir
         borderBottom: `1px solid ${C.amber}30`,
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
-        <span style={{ fontSize: 24 }}>{nextEvent.event.icon}</span>
+        <SimIcon emoji={nextEvent.event.icon} size={24} color="#374151" />
         <div style={{ flex: 1 }}>
           <div style={{
             display: 'inline-block', padding: '2px 8px', borderRadius: 6,
@@ -419,12 +458,26 @@ export const SimulationScreen = ({ onBack, onFinish }) => {
     return row?.totalAssets ?? null;
   }, [simRows, currentAge]);
 
+  // ── 動的スコア計算（4指標を年次シミュレーション行から毎年再計算） ──
+  const dynamicGaugeResult = React.useMemo(() => {
+    return calcDynamicScoreFromRows(simRows, currentAge, retireAge);
+  }, [simRows, currentAge, retireAge]);
+
+  // 表示用ゲージ: シミュレーション行があれば動的値を使用、なければストア値にフォールバック
+  const displayGauge = dynamicGaugeResult?.gauge ?? currentGauge;
+
   // ゲージのステータス
-  const gaugeStatus = gaugeToStatus(currentGauge);
-  const gaugeColor  = gaugeToColor(currentGauge);
-  const gaugeGrad   = gaugeToGradient(currentGauge);
+  const gaugeStatus = gaugeToStatus(displayGauge);
+  const gaugeColor  = gaugeToColor(displayGauge);
+  const gaugeGrad   = gaugeToGradient(displayGauge);
 
   // 初期化（初回マウント時）
+  React.useLayoutEffect(() => {
+    // 画面最上部にスクロール（前画面の位置をリセット）
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, []);
   React.useEffect(() => {
     if (simCurrentAge === null) {
       actions.setSimAge(startAge);
@@ -487,6 +540,22 @@ export const SimulationScreen = ({ onBack, onFinish }) => {
     const result = runFullSimulation(profile, selectedChoices);
     actions.setResult(result);
 
+    // 前回プランをlocalStorageに保存（ホーム画面表示用）
+    try {
+      const savedPlan = {
+        date: new Date().toLocaleDateString('ja-JP'),
+        score: result.fourIndicators?.householdSafety?.score ?? result.safetySummary?.gauge ?? 0,
+        status: result.fourIndicators?.householdSafety?.status ?? '',
+        lifeType: profile.lifeType ?? 'couple',
+        age: profile.currentAge ?? 30,
+        housingAge: profile.housingPurchaseAge ?? null,
+      };
+      const existing = JSON.parse(localStorage.getItem('miraiTreePlans') ?? '[]');
+      existing.unshift(savedPlan);
+      localStorage.setItem('miraiTreePlans', JSON.stringify(existing.slice(0, 5)));
+      localStorage.setItem('miraiTreeLastResult', JSON.stringify({ result, profile, selectedChoices }));
+    } catch (_) {}
+
     if (typeof onFinish === 'function') onFinish();
     else actions.setScreen('result');
   };
@@ -502,115 +571,190 @@ export const SimulationScreen = ({ onBack, onFinish }) => {
     <div style={{
       minHeight:  '100vh',
       background: C.bg,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif',
+      fontFamily: "'Noto Sans JP', -apple-system, 'Apple Color Emoji', sans-serif",
       paddingBottom: 120,
     }}>
 
       {/* ── ヘッダー ─────────────────────────────────────────── */}
       <div style={{
-        position:      'sticky', top: 0, zIndex: 50,
+        position:      'fixed', top: 0, left: 0, right: 0, zIndex: 50,
         background:    'rgba(248,250,251,0.96)',
         backdropFilter:'blur(10px)',
         WebkitBackdropFilter:'blur(10px)',
         borderBottom:  `1px solid ${C.border}`,
-        padding:       '14px 20px',
-        display:       'flex',
-        alignItems:    'center',
-        gap:           12,
+        paddingTop:    'env(safe-area-inset-top, 0px)',
       }}>
-        <button onClick={handleBack} style={{
-          width: 36, height: 36, borderRadius: '50%',
-          border: `1.5px solid ${C.border}`, background: C.white,
-          fontSize: 15, cursor: 'pointer', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', color: C.textMuted,
-        }}>←</button>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>人生シミュレーション</div>
-          <div style={{ fontSize: 11, color: C.textMuted }}>
-            {startAge}歳〜{retireAge}歳
+        <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={handleBack} style={{
+            width: 36, height: 36, borderRadius: '50%',
+            border: `1.5px solid ${C.border}`, background: C.white,
+            fontSize: 15, cursor: 'pointer', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill={C.textMuted}>
+              <path d={SIM_PATHS.chevron} />
+            </svg>
+          </button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>人生シミュレーション</div>
+            <div style={{ fontSize: 11, color: C.textMuted }}>
+              {startAge}歳〜{retireAge}歳
+            </div>
           </div>
         </div>
       </div>
 
       {/* ── メインコンテンツ ──────────────────────────────────── */}
-      <div style={{ padding: '16px', maxWidth: 480, margin: '0 auto' }}>
+      <div style={{
+        padding: '16px', maxWidth: 480, margin: '0 auto',
+        paddingTop: 'calc(66px + env(safe-area-inset-top, 0px))',
+      }}>
 
-        {/* ── 年齢・進捗バー ─────────────────────────────────── */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-            <span style={{ fontSize: 11, color: C.textMuted }}>{startAge}歳</span>
-            <div style={{ textAlign: 'center' }}>
-              <span style={{ fontSize: 32, fontWeight: 900, color: C.text, lineHeight: 1 }}>
-                {currentAge}
-              </span>
-              <span style={{ fontSize: 14, color: C.textMuted, marginLeft: 3, fontWeight: 600 }}>歳</span>
-            </div>
-            <span style={{ fontSize: 11, color: C.textMuted }}>{retireAge}歳</span>
-          </div>
-          <div style={{ height: 6, background: '#f0f0f0', borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', width: `${progress * 100}%`,
-              borderRadius: 99,
-              background: `linear-gradient(90deg, ${C.green}, ${C.greenDark})`,
-              transition: 'width 0.5s ease',
-            }} />
-          </div>
-        </div>
-
-        {/* ── 安全判定パネル ─────────────────────────────────── */}
-        <div style={{
-          background:   C.white,
-          borderRadius: 20,
-          padding:      '18px 20px',
-          border:       `1.5px solid ${gaugeColor}30`,
-          marginBottom: 12,
-        }}>
-          {/* ステータスバッジ + 現在資産 */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{
-              padding:      '4px 14px',
-              borderRadius: 999,
-              background:   gaugeStatus.bg,
-              color:        gaugeStatus.color,
-              fontSize:     13,
-              fontWeight:   800,
-              border:       `1.5px solid ${gaugeStatus.color}40`,
-            }}>
-              {gaugeStatus.label}
-            </div>
-            {currentAsset !== null && (
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, marginBottom: 2 }}>試算資産</div>
-                <div style={{
-                  fontSize:   17,
-                  fontWeight: 800,
-                  color:      currentAsset < 0 ? C.red : C.text,
-                  lineHeight: 1,
-                }}>
-                  {fmtAsset(currentAsset)}
+        {/* ── タイムラインバー ──────────────────────────────────── */}
+        {(() => {
+          const totalYears = retireAge - startAge;
+          const pctNow = totalYears > 0 ? ((currentAge - startAge) / totalYears) * 100 : 0;
+          const nextAge = nextEventInfo?.age ?? null;
+          const pctNext = nextAge && totalYears > 0 ? ((nextAge - startAge) / totalYears) * 100 : null;
+          return (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: C.textMuted }}>{startAge}歳</span>
+                <div style={{ textAlign: 'center' }}>
+                  <span style={{ fontSize: 32, fontWeight: 900, color: C.text, lineHeight: 1 }}>{currentAge}</span>
+                  <span style={{ fontSize: 14, color: C.textMuted, marginLeft: 3, fontWeight: 600 }}>歳</span>
                 </div>
+                <span style={{ fontSize: 11, color: C.textMuted }}>{retireAge}歳</span>
+              </div>
+              <div style={{ position: 'relative', height: 8, background: '#f0f0f0', borderRadius: 99, overflow: 'visible', marginBottom: 4 }}>
+                {/* 進捗バー */}
+                <div style={{
+                  position: 'absolute', top: 0, left: 0,
+                  height: '100%', width: `${pctNow}%`,
+                  borderRadius: 99,
+                  background: `linear-gradient(90deg, ${C.green}, ${C.greenDark})`,
+                  transition: 'width 0.5s ease',
+                }} />
+                {/* 現在地マーカー（●） */}
+                <div style={{
+                  position: 'absolute', top: '50%', left: `${Math.min(pctNow, 97)}%`,
+                  transform: 'translate(-50%, -50%)',
+                  width: 14, height: 14, borderRadius: '50%',
+                  background: C.greenDark, border: '2px solid #fff',
+                  boxShadow: '0 1px 4px rgba(22,163,74,0.5)',
+                  zIndex: 2,
+                }} />
+                {/* 次のイベントマーカー（◆） */}
+                {pctNext !== null && (
+                  <div style={{
+                    position: 'absolute', top: '50%', left: `${Math.min(pctNext, 97)}%`,
+                    transform: 'translate(-50%, -50%) rotate(45deg)',
+                    width: 10, height: 10,
+                    background: '#d97706', border: '2px solid #fff',
+                    boxShadow: '0 1px 4px rgba(217,119,6,0.4)',
+                    zIndex: 1,
+                  }} />
+                )}
+              </div>
+              {nextEventInfo && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: C.textMuted }}>
+                  <span />
+                  <span style={{ color: '#d97706', fontWeight: 600 }}>◆ {nextEventInfo.age}歳 {nextEventInfo.event?.title}</span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── 家計安全度ゲージ ──────────────────────────────────── */}
+        <div style={{
+          background: '#fff', borderRadius: 16, padding: '14px 18px',
+          border: `1.5px solid ${gaugeColor}30`, marginBottom: 12,
+          boxShadow: `0 2px 12px ${gaugeColor}18`,
+          display: 'flex', alignItems: 'center', gap: 14,
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', letterSpacing: '0.08em', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
+              <span>家計安全度</span>
+              <span style={{
+                padding: '1px 8px', borderRadius: 999,
+                background: gaugeStatus.bg, color: gaugeColor,
+                fontSize: 10, fontWeight: 800,
+              }}>{gaugeStatus.label}</span>
+            </div>
+            <div style={{ height: 8, background: '#f0f0f0', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', width: `${displayGauge}%`, borderRadius: 99,
+                background: gaugeColor,
+                transition: 'width 0.6s cubic-bezier(0.34,1.2,0.64,1), background 0.4s ease',
+              }} />
+            </div>
+            {dynamicGaugeResult && (
+              <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                <span style={{ fontSize: 10, color: '#9ca3af' }}>
+                  収支余剰率 <strong style={{ color: dynamicGaugeResult.surplusRate >= 0 ? C.greenDark : C.red }}>
+                    {dynamicGaugeResult.surplusRatePct >= 0 ? '+' : ''}{dynamicGaugeResult.surplusRatePct}%
+                  </strong>
+                </span>
+                <span style={{ fontSize: 10, color: '#9ca3af' }}>
+                  防衛資金 <strong style={{ color: dynamicGaugeResult.emergencyMonths >= 6 ? C.greenDark : C.amber }}>
+                    {dynamicGaugeResult.emergencyMonths}ヶ月
+                  </strong>
+                </span>
               </div>
             )}
           </div>
-
-          {/* ゲージバー */}
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, letterSpacing: '0.06em' }}>生活安全度</span>
-              <span style={{ fontSize: 24, fontWeight: 900, color: gaugeColor, lineHeight: 1 }}>{currentGauge}</span>
-            </div>
-            <div style={{ height: 10, background: '#f0f0f0', borderRadius: 99, overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', width: `${currentGauge}%`,
-                borderRadius: 99, background: gaugeGrad,
-                transition: 'width 0.6s cubic-bezier(0.22,1,0.36,1)',
-              }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: C.textMuted, marginTop: 3 }}>
-              <span>高リスク</span><span>要見直し</span><span>慎重</span><span>安全圏</span>
-            </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ fontSize: 30, fontWeight: 900, color: gaugeColor, lineHeight: 1, transition: 'color 0.4s ease' }}>{displayGauge}</div>
+            <div style={{ fontSize: 10, color: '#9ca3af' }}>/ 100</div>
           </div>
         </div>
+
+        {/* ── 4枚ステータスカード ──────────────────────────────── */}
+        {(() => {
+          const curRow = simRows.find(r => r.age === currentAge);
+          const monthlySurplus = curRow ? (curRow.totalIncome - curRow.totalExpense) / 12 : null;
+          const annualSavings = curRow ? Math.max(0, curRow.totalIncome - curRow.totalExpense) : null;
+          const yearsToNext = nextEventInfo ? nextEventInfo.age - currentAge : null;
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+              {/* 試算資産 */}
+              <div style={{ padding: '12px 14px', background: C.white, borderRadius: 14, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: C.textMuted, marginBottom: 4 }}>試算資産</div>
+                <div style={{ fontSize: 17, fontWeight: 900, color: currentAsset != null && currentAsset < 0 ? C.red : C.greenDark, lineHeight: 1.2 }}>
+                  {currentAsset != null ? fmtAsset(currentAsset) : '—'}
+                </div>
+                <div style={{ fontSize: 9, color: C.textMuted, marginTop: 2 }}>{currentAge}歳時点</div>
+              </div>
+              {/* 月間余剰 */}
+              <div style={{ padding: '12px 14px', background: C.white, borderRadius: 14, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: C.textMuted, marginBottom: 4 }}>月間余剰</div>
+                <div style={{ fontSize: 17, fontWeight: 900, color: monthlySurplus != null && monthlySurplus < 0 ? C.red : C.greenDark, lineHeight: 1.2 }}>
+                  {monthlySurplus != null ? `${monthlySurplus >= 0 ? '+' : ''}${Math.round(monthlySurplus * 10) / 10}万` : '—'}
+                </div>
+                <div style={{ fontSize: 9, color: C.textMuted, marginTop: 2 }}>現時点の収支</div>
+              </div>
+              {/* 年間積立見込み */}
+              <div style={{ padding: '12px 14px', background: C.white, borderRadius: 14, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: C.textMuted, marginBottom: 4 }}>年間積立見込み</div>
+                <div style={{ fontSize: 17, fontWeight: 900, color: C.greenDark, lineHeight: 1.2 }}>
+                  {annualSavings != null ? `${Math.round(annualSavings)}万` : '—'}
+                </div>
+                <div style={{ fontSize: 9, color: C.textMuted, marginTop: 2 }}>/ 年</div>
+              </div>
+              {/* 次イベントまで */}
+              <div style={{ padding: '12px 14px', background: C.white, borderRadius: 14, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: C.textMuted, marginBottom: 4 }}>次イベントまで</div>
+                <div style={{ fontSize: 17, fontWeight: 900, color: yearsToNext != null ? '#d97706' : C.textMuted, lineHeight: 1.2 }}>
+                  {yearsToNext != null ? `${yearsToNext}年` : 'なし'}
+                </div>
+                <div style={{ fontSize: 9, color: C.textMuted, marginTop: 2 }}>
+                  {nextEventInfo ? `${nextEventInfo.age}歳・${nextEventInfo.event?.title}` : '全イベント処理済み'}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── 次のイベント（主役カード） ─────────────────────── */}
         <NextEventCard
@@ -630,7 +774,8 @@ export const SimulationScreen = ({ onBack, onFinish }) => {
       {/* ── 固定フッターボタン ────────────────────────────────── */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
-        padding: '12px 20px 32px',
+        padding: '12px 20px',
+        paddingBottom: 'calc(32px + env(safe-area-inset-bottom, 0px))',
         background: 'rgba(248,250,251,0.96)',
         backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)',
@@ -672,7 +817,7 @@ export const SimulationScreen = ({ onBack, onFinish }) => {
               }}
             >
               {nextEventInfo
-                ? `次のイベントへ進む（${nextEventInfo.age}歳）`
+                ? `次のイベントへ進む → ${nextEventInfo.age}歳・${nextEventInfo.event?.title ?? ''}`
                 : '退職まで一括試算 →'
               }
             </button>
@@ -724,7 +869,7 @@ export const SimulationScreen = ({ onBack, onFinish }) => {
       {effectiveEvent && (
         <EventCard
           event={effectiveEvent}
-          currentGauge={currentGauge}
+          currentGauge={displayGauge}
           onSelect={handleSelect}
         />
       )}

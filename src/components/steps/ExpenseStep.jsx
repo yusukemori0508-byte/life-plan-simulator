@@ -1,7 +1,7 @@
 // src/components/steps/ExpenseStep.jsx
 import { NumberStepper, SectionTitle, Divider } from '../ui.jsx';
 import { COLORS } from '../../constants.js';
-import { fmtMan, safeNum } from '../../utils.js';
+import { fmtMan, safeNum, calcNetIncome } from '../../utils.js';
 
 const st = {
   wrap: { padding: '16px 16px 8px' },
@@ -55,6 +55,17 @@ const st = {
     fontSize: 12,
     color: '#6b7280',
     marginTop: 4,
+  },
+  balanceCard: (over) => ({
+    borderRadius: 10,
+    padding: '12px 14px',
+    marginBottom: 12,
+    background: over ? '#fef2f2' : '#f0fdf4',
+    border: `1px solid ${over ? '#fecaca' : '#bbf7d0'}`,
+  }),
+  balanceRow: {
+    display: 'flex', justifyContent: 'space-between',
+    alignItems: 'center', fontSize: 12, marginBottom: 3,
   },
 };
 
@@ -120,6 +131,18 @@ export const ExpenseStep = ({ form, onChange, errors = {} }) => {
 
   const investableCash = Math.max(0, currentCash - emergencyFund);
 
+  // ── 月間収支チェック ────────────────────────────────────────
+  const selfIncome   = safeNum(form.selfIncome, 0);
+  const spouseIncome = safeNum(form.spouseIncome, 0);
+  const netSelf      = selfIncome   > 0 ? calcNetIncome(selfIncome,   !!form.isSelfEmployed) : 0;
+  const netSpouse    = spouseIncome > 0 ? calcNetIncome(spouseIncome, false) : 0;
+  const netMonthly   = Math.round((netSelf + netSpouse) / 12 * 10) / 10;
+  const expHousing   = safeNum(form.expHousing, 8);
+  const investment   = safeNum(form.monthlyInvestment, 0);
+  const totalOut     = Math.round((monthlyExpense + expHousing + investment) * 10) / 10;
+  const balance      = Math.round((netMonthly - totalOut) * 10) / 10;
+  const overBudget   = netMonthly > 0 && balance < 0;
+
   return (
     <div style={st.wrap}>
       <SectionTitle icon="💸" title="生活費" />
@@ -136,6 +159,32 @@ export const ExpenseStep = ({ form, onChange, errors = {} }) => {
         help="家賃・住宅ローン以外の生活費"
         error={errors.monthlyExpense}
       />
+
+      {/* 月間収支サマリー（収入が入力済みの場合のみ表示） */}
+      {netMonthly > 0 && (
+        <div style={st.balanceCard(overBudget)}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: overBudget ? '#dc2626' : '#16a34a', marginBottom: 6, letterSpacing: '0.04em' }}>
+            {overBudget ? '月間収支が赤字になっています' : '月間収支'}
+          </div>
+          <div style={st.balanceRow}>
+            <span style={{ color: '#6b7280' }}>手取り月収</span>
+            <span style={{ fontWeight: 700, color: '#111827' }}>{fmtMan(netMonthly)} 万円</span>
+          </div>
+          <div style={st.balanceRow}>
+            <span style={{ color: '#6b7280' }}>生活費＋住居費＋投資</span>
+            <span style={{ fontWeight: 700, color: '#111827' }}>− {fmtMan(totalOut)} 万円</span>
+          </div>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            fontSize: 13, fontWeight: 800, marginTop: 6, paddingTop: 6,
+            borderTop: `1px solid ${overBudget ? '#fecaca' : '#bbf7d0'}`,
+            color: overBudget ? '#dc2626' : '#16a34a',
+          }}>
+            <span>月間余剰</span>
+            <span>{balance >= 0 ? '+' : ''}{fmtMan(balance)} 万円</span>
+          </div>
+        </div>
+      )}
 
       <NumberStepper
         label="老後の月間生活費"
@@ -177,7 +226,7 @@ export const ExpenseStep = ({ form, onChange, errors = {} }) => {
 
       {investableCash > 0 && (
         <div style={st.investNote}>
-          💡 緊急予備資金を差し引いた運用可能な現金: {fmtMan(investableCash)}万円
+          運用可能な現金（緊急予備資金差引後）: {fmtMan(investableCash)}万円
         </div>
       )}
 

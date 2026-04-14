@@ -32,16 +32,17 @@ const st = {
     alignItems: 'center',
   },
   dot: (active, done) => ({
-    width: active ? 22 : 8,
-    height: 8,
-    borderRadius: 4,
+    width: active ? 22 : done ? 14 : 8,
+    height: done ? 14 : 8,
+    borderRadius: 999,
     background: done ? '#4a9e6b' : active ? '#e8854a' : '#cde5d4',
     transition: 'all 0.25s ease',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 7,
+    fontSize: 9,
     color: '#fff',
+    fontWeight: 700,
   }),
   progressBar: {
     height: 4,
@@ -129,7 +130,6 @@ export const StepBar = ({ currentStep, onNext, onPrev, canProceed, errors = [] }
       {/* トップバー */}
       <div style={st.topBar}>
         <div style={st.stepTitle}>
-          <span>{step?.icon || '📋'}</span>
           <span>{step?.label || ''}</span>
           <span style={st.stepNum}>
             ({currentStep + 1}/{totalSteps})
@@ -153,7 +153,7 @@ export const StepBar = ({ currentStep, onNext, onPrev, canProceed, errors = [] }
         {/* エラー表示 */}
         {errors.length > 0 && (
           <div style={st.errorBanner}>
-            <span style={st.errorIcon}>⚠️</span>
+            <span style={st.errorIcon}>!</span>
             <div style={st.errorText}>
               {errors.map((e, i) => (
                 <div key={i}>{e}</div>
@@ -169,7 +169,7 @@ export const StepBar = ({ currentStep, onNext, onPrev, canProceed, errors = [] }
           style={st.navBtn('secondary', false)}
           onClick={onPrev}
         >
-          {isFirst ? '🏠 最初へ' : '← 前へ'}
+          {isFirst ? '最初へ' : '← 前へ'}
         </button>
 
         <div style={st.navCenter}>
@@ -184,7 +184,7 @@ export const StepBar = ({ currentStep, onNext, onPrev, canProceed, errors = [] }
           onClick={onNext}
           disabled={!canProceed && !isLast}
         >
-          {isLast ? '🌳 結果を見る' : '次へ →'}
+          {isLast ? '結果を見る' : '次へ →'}
         </button>
       </div>
 

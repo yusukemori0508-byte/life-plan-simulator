@@ -218,17 +218,23 @@ export function Badge({ children, color = COLORS.primary, bg }) {
 // ────────────────────────────────────────────────
 // Alert
 // ────────────────────────────────────────────────
+const ALERT_PATHS = {
+  info:    'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z',
+  success: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+  warning: 'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z',
+  error:   'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z',
+};
 export function Alert({ type = 'info', title, children }) {
   const types = {
-    info:    { bg: '#eff6ff', border: '#bfdbfe', icon: 'ℹ️', color: '#1d4ed8' },
-    success: { bg: '#f0fdf4', border: '#a7f3d0', icon: '✅', color: '#065f46' },
-    warning: { bg: '#fffbeb', border: '#fde68a', icon: '⚠️', color: '#92400e' },
-    error:   { bg: '#fef2f2', border: '#fecaca', icon: '🚨', color: '#991b1b' },
+    info:    { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8' },
+    success: { bg: '#f0fdf4', border: '#a7f3d0', color: '#065f46' },
+    warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e' },
+    error:   { bg: '#fef2f2', border: '#fecaca', color: '#991b1b' },
   };
   const t = types[type] ?? types.info;
   return (
     <div style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: 10, padding: '10px 12px', marginBottom: 12, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-      <span style={{ fontSize: 14, flexShrink: 0 }}>{t.icon}</span>
+      <svg width={14} height={14} viewBox="0 0 24 24" fill={t.color} style={{ flexShrink: 0, marginTop: 1 }}><path d={ALERT_PATHS[type] ?? ALERT_PATHS.info} /></svg>
       <div style={{ flex: 1 }}>
         {title && <div style={{ fontSize: 13, fontWeight: 700, color: t.color, marginBottom: 3 }}>{title}</div>}
         <div style={{ fontSize: 12, color: t.color, lineHeight: 1.5 }}>{children}</div>
@@ -244,10 +250,9 @@ export function SectionTitle({ children, sub, icon }) {
   return (
     <div style={{ marginBottom: 10, marginTop: 4, paddingLeft: 10, borderLeft: `3px solid ${COLORS.primary}` }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {icon && <span style={{ fontSize: 17, lineHeight: 1 }}>{icon}</span>}
         <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>{children}</span>
       </div>
-      {sub && <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2, marginLeft: icon ? 22 : 0 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>{sub}</div>}
     </div>
   );
 }
@@ -295,7 +300,6 @@ export function TabBar({ tabs = [], activeTab, onTabChange }) {
               minWidth: 56,
             }}
           >
-            <span style={{ fontSize: 16 }}>{tab.icon}</span>
             <span style={{ fontSize: 10, fontWeight: isActive ? 700 : 500, whiteSpace: 'nowrap' }}>{tab.label}</span>
           </button>
         );
@@ -389,7 +393,7 @@ export function DiagnosisCard({ diagnosis }) {
       padding: '10px 12px', marginBottom: 8,
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-        <span style={{ fontSize: 16, flexShrink: 0 }}>{lv.icon}</span>
+        <div style={{ width: 10, height: 10, borderRadius: '50%', background: lv.color, flexShrink: 0, marginTop: 3 }} />
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <span style={{ fontSize: 10, fontWeight: 700, color: lv.color, background: `${lv.color}18`, borderRadius: 10, padding: '2px 7px' }}>
@@ -419,10 +423,10 @@ export function AdviceCardInner({ advice }) {
 
   // 成長レベルを改善効果から算出
   const growthLevel = diffAsset >= 500
-    ? { icon: '🌳', label: '大きな改善', color: '#2d7a52', bg: '#e0f5e8', border: '#a0d8ba' }
+    ? { label: '大きな改善', color: '#2d7a52', bg: '#e0f5e8', border: '#a0d8ba' }
     : diffAsset >= 100
-    ? { icon: '🌿', label: 'しっかり改善', color: '#4CAF7A', bg: '#edfaf3', border: '#b8e8cf' }
-    : { icon: '🌱', label: '小さな改善', color: '#6FCF97', bg: '#f0fbf5', border: '#c8eedc' };
+    ? { label: 'しっかり改善', color: '#4CAF7A', bg: '#edfaf3', border: '#b8e8cf' }
+    : { label: '小さな改善', color: '#6FCF97', bg: '#f0fbf5', border: '#c8eedc' };
 
   return (
     <div style={{
@@ -441,11 +445,11 @@ export function AdviceCardInner({ advice }) {
             border: `1px solid ${growthLevel.border}`,
             borderRadius: 12, padding: '3px 9px',
           }}>
-            {growthLevel.icon} {growthLevel.label}
+            {growthLevel.label}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <span style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>{a.icon}</span>
+          <div style={{ width: 4, alignSelf: 'stretch', borderRadius: 2, background: '#4CAF7A', flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.text, lineHeight: 1.3, marginBottom: 4 }}>{a.title}</div>
             <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.4 }}>{a.summary}</div>
@@ -455,11 +459,11 @@ export function AdviceCardInner({ advice }) {
         {diffAsset > 0 && (
           <div style={{ marginTop: 8, display: 'flex', gap: 7, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#4CAF7A', background: '#edfaf3', border: '1px solid #b8e8cf', borderRadius: 12, padding: '3px 9px' }}>
-              🍊 最終資産 +{Math.round(diffAsset).toLocaleString()}万円
+              +{Math.round(diffAsset).toLocaleString()}万円
             </span>
             {depletionImproved && (
               <span style={{ fontSize: 11, fontWeight: 700, color: '#2d7a52', background: '#e0f5e8', border: '1px solid #a0d8ba', borderRadius: 12, padding: '3px 9px' }}>
-                🌳 枯渇リスク解消
+                枯渇リスク解消
               </span>
             )}
           </div>

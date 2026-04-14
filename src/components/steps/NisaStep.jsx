@@ -97,7 +97,7 @@ export const NisaStep = ({ form, onChange, errors = {} }) => {
         </div>
         {usedPct >= 100 && (
           <div style={{ marginTop: 6, fontSize: 12, color: '#dc2626', fontWeight: 600 }}>
-            ⚠️ 生涯非課税枠（1,800万円）に達しています
+            ! 生涯非課税枠（1,800万円）に達しています
           </div>
         )}
       </div>
@@ -142,7 +142,7 @@ export const NisaStep = ({ form, onChange, errors = {} }) => {
       )}
 
       <div style={st.infoCard}>
-        💡 新NISAは2024年〜。年360万円・生涯1,800万円まで非課税で投資可能。
+        新NISAは2024年〜。年360万円・生涯1,800万円まで非課税で投資可能。
         売却した投資枠は翌年以降に復活します（生涯枠は復活しません）。
       </div>
 

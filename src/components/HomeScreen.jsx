@@ -7,22 +7,31 @@ import { useAppStore } from '../store/useAppStore.jsx';
 import { DEFAULT_PROFILE } from '../store/useAppStore.jsx';
 
 // ─────────────────────────────────────────────────────────────
+// ピッカーカード用 SVG アイコン（絵文字代替）
+// ─────────────────────────────────────────────────────────────
+const PICKER_ICON_PATHS = {
+  single: "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z",
+  couple: "M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z",
+  family: "M4 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm.5 2H3c-.83 0-1.5.67-1.5 1.5v1c0 .28.22.5.5.5h4v-1c0-.72.23-1.38.59-1.95-.36-.03-.72-.05-1.09-.05zM12 11c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm1.5 2h-3c-1.1 0-2 .9-2 2v1h7v-1c0-1.1-.9-2-2-2zM20 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm.5 2h-1.5c-.37 0-.73.02-1.09.05.36.57.59 1.23.59 1.95v1h4c.28 0 .5-.22.5-.5v-1c0-.83-.67-1.5-1.5-1.5z",
+};
+
+// ─────────────────────────────────────────────────────────────
 // ライフタイプ定義（デフォルトプロフィール差分）
 // ─────────────────────────────────────────────────────────────
 const LIFE_TYPES = [
   {
     id:      'single',
     label:   '一人暮らし',
-    icon:    '🌱',
+    iconKey: 'single',
     sub:     'じぶんペースで',
     color:   '#6366f1',
     profile: {
       lifeType:          'single',
-      selfIncome:        380,
+      selfIncome:        null,
       spouseIncome:      0,
-      monthlyExpense:    16,
-      monthlyInvestment: 2,
-      currentSavings:    80,
+      monthlyExpense:    null,
+      monthlyInvestment: null,
+      currentSavings:    null,
       numChildren:       0,
       firstChildAge:     null,
       housingPurchaseAge: null,
@@ -31,37 +40,37 @@ const LIFE_TYPES = [
   {
     id:      'couple',
     label:   '共働き',
-    icon:    '🌿',
-    sub:     'ふたりで育てる',
+    iconKey: 'couple',
+    sub:     'ふたりで歩む',
     color:   '#0891b2',
     profile: {
       lifeType:          'couple',
-      selfIncome:        500,
-      spouseIncome:      300,
-      monthlyExpense:    26,
-      monthlyInvestment: 5,
-      currentSavings:    200,
+      selfIncome:        null,
+      spouseIncome:      null,
+      monthlyExpense:    null,
+      monthlyInvestment: null,
+      currentSavings:    null,
       numChildren:       1,
       firstChildAge:     33,
-      housingPurchaseAge: 35,
+      housingPurchaseAge: null,
     },
   },
   {
     id:      'family',
     label:   '子育て中',
-    icon:    '🍃',
+    iconKey: 'family',
     sub:     '家族の木を育む',
     color:   '#16a34a',
     profile: {
       lifeType:          'family',
-      selfIncome:        550,
-      spouseIncome:      200,
-      monthlyExpense:    30,
-      monthlyInvestment: 3,
-      currentSavings:    150,
+      selfIncome:        null,
+      spouseIncome:      null,
+      monthlyExpense:    null,
+      monthlyInvestment: null,
+      currentSavings:    null,
       numChildren:       2,
       firstChildAge:     31,
-      housingPurchaseAge: 33,
+      housingPurchaseAge: null,
     },
   },
 ];
@@ -73,6 +82,25 @@ export const HomeScreen = ({ onStart }) => {
   const { actions } = useAppStore();
   const [showPicker, setShowPicker] = React.useState(false);
   const [lifeType,   setLifeType]   = React.useState('couple');
+
+  // 前回の保存データをlocalStorageから読み込み
+  const [savedPlan, setSavedPlan] = React.useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('miraiTreeLastResult') ?? 'null');
+    } catch { return null; }
+  });
+
+  const handleViewLastPlan = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('miraiTreeLastResult') ?? 'null');
+      if (!saved) return;
+      actions.restoreSession({
+        profileData:     saved.profileData,
+        selectedChoices: saved.selectedChoices,
+        resultData:      saved.resultData,
+      });
+    } catch (_) {}
+  };
 
   const selected = LIFE_TYPES.find((lt) => lt.id === lifeType) ?? LIFE_TYPES[1];
 
@@ -136,29 +164,40 @@ export const HomeScreen = ({ onStart }) => {
       `}</style>
 
       {/* ── 背景画像 ──────────────────────────────────────────── */}
+      {/*
+        122% サイズ計算（375×812 preview）:
+          画像幅 457px / 高さ推定 732px → 縦余白 80px
+          Y=56%: 上44px・下36px の呼吸感
+        iPhone 17 Pro (430×932):
+          画像幅 525px / 高さ推定 839px → 縦余白 93px
+          Y=56%: 上52px・下41px — ノッチ下に空が見える構図
+      */}
       <div style={{
-        position: 'absolute', inset: 0, zIndex: 0,
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0,
         backgroundImage:    "url('/hero-tree2.jpg')",
-        backgroundSize:     '135%',
-        backgroundPosition: '53% 45%',
+        backgroundSize:     'cover',
+        backgroundPosition: '54% 60%',
         backgroundRepeat:   'no-repeat',
-        filter:             'saturate(1.18) brightness(0.96) contrast(1.04)',
+        filter:             'saturate(1.15) brightness(0.97) contrast(1.03)',
       }} />
 
-      {/* ── 青空グラデーションオーバーレイ ───────────────────── */}
+      {/* ── 上部オーバーレイ（ステータスバー可読性 + 空の繋ぎ） ── */}
+      {/*
+        旧: 青空グラデーション(62%) + 黒グラデーション(30%) が重なって過剰に暗かった
+        新: 1枚に統合。ステータスバー直下は黒20%、空エリアは薄い青でなじませる
+      */}
       <div style={{
-        position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1, pointerEvents: 'none',
+        height: 'calc(160px + env(safe-area-inset-top, 0px))',
         background: [
           'linear-gradient(180deg,',
-          'rgba(80,130,190,0.18) 0%,',
-          'rgba(100,150,200,0.08) 22%,',
-          'rgba(255,255,255,0.00) 46%,',
-          'rgba(60,100,70,0.04) 70%,',
-          'rgba(30,60,40,0.12) 100%)',
+          'rgba(0,0,0,0.20)    0%,',    /* ステータスバー文字を読みやすく */
+          'rgba(20,40,80,0.10) 30%,',   /* 空の色みをわずかに深める */
+          'rgba(0,0,0,0.00)   100%)',
         ].join(''),
       }} />
 
-      {/* ── 下部ビネット（ボタンが白背景に消えないよう濃くする） ── */}
+      {/* ── 下部ビネット（ボタンが背景に消えないよう濃くする） ── */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none',
         background: 'linear-gradient(to bottom,'
@@ -173,28 +212,36 @@ export const HomeScreen = ({ onStart }) => {
         position:  'absolute',
         top: 0, left: 0, right: 0,
         textAlign: 'center',
-        padding:   '72px 24px 0',
+        /*
+          Dynamic Island (59px) or ステータスバー (44px) の下から 42px の余白
+          → 実機iPhone 17 Pro: 59+42=101px, preview: 44+42=86px
+        */
+        paddingTop:   'calc(env(safe-area-inset-top, 44px) + 42px)',
+        paddingLeft:  '24px',
+        paddingRight: '24px',
         zIndex:    10,
         animation: 'hsFadeDown 0.8s cubic-bezier(0.22,1,0.36,1) both',
       }}>
+        {/* ブランド名 — +4pt (21→25px) で最終仕上げ */}
         <div style={{
-          fontSize:      11,
+          fontSize:      25,
           fontWeight:    800,
-          color:         'rgba(255,255,255,0.92)',
-          letterSpacing: '0.30em',
-          marginBottom:  10,
+          color:         'rgba(255,255,255,0.96)',
+          letterSpacing: '0.42em',
+          marginBottom:  20,            /* キャッチコピーとの間隔を広げる */
           textTransform: 'uppercase',
-          textShadow:    '0 1px 8px rgba(0,0,0,0.35)',
+          textShadow:    '0 1px 6px rgba(0,0,0,0.55), 0 2px 20px rgba(0,0,0,0.40)',
         }}>
-          Life Plan Simulator
+          Mirai Tree
         </div>
+        {/* キャッチコピー */}
         <div style={{
-          fontSize:      'clamp(26px, 5.6vw, 38px)',
+          fontSize:      'clamp(28px, 7.2vw, 42px)',
           fontWeight:    900,
           color:         '#fff',
-          lineHeight:    1.22,
+          lineHeight:    1.25,
           letterSpacing: '0.01em',
-          textShadow:    '0 1px 10px rgba(0,0,0,0.28)',
+          textShadow:    '0 2px 8px rgba(0,0,0,0.50), 0 4px 24px rgba(0,0,0,0.35)',
         }}>
           あなたの未来を、<br />育てよう。
         </div>
@@ -204,7 +251,7 @@ export const HomeScreen = ({ onStart }) => {
       {!showPicker && (
         <div style={{
           position:       'absolute',
-          bottom:         'calc(13% + env(safe-area-inset-bottom, 16px))',
+          bottom:         'calc(8% + env(safe-area-inset-bottom, 20px))',
           left:           0,
           right:          0,
           zIndex:         20,
@@ -217,8 +264,8 @@ export const HomeScreen = ({ onStart }) => {
             className="hs-cta-btn"
             onClick={() => setShowPicker(true)}
             style={{
-              width:        90,
-              height:       90,
+              width:        96,
+              height:       96,
               borderRadius: '50%',
               border:       '3px solid rgba(255,255,255,0.90)',
               background:   'rgba(255,255,255,0.55)',
@@ -267,6 +314,29 @@ export const HomeScreen = ({ onStart }) => {
               住宅購入・教育費・老後を一気にチェック
             </div>
           </div>
+
+          {/* 前回の続きから */}
+          {savedPlan && (
+            <button
+              onClick={handleViewLastPlan}
+              style={{
+                padding:       '10px 24px',
+                borderRadius:  999,
+                border:        '1.5px solid rgba(255,255,255,0.70)',
+                background:    'rgba(255,255,255,0.18)',
+                fontSize:      13,
+                fontWeight:    700,
+                color:         'rgba(255,255,255,0.95)',
+                cursor:        'pointer',
+                backdropFilter: 'blur(6px)',
+                WebkitBackdropFilter: 'blur(6px)',
+                textShadow:    '0 1px 4px rgba(0,0,0,0.30)',
+                letterSpacing: '0.03em',
+              }}
+            >
+              前回の続きから →
+            </button>
+          )}
         </div>
       )}
 
@@ -291,7 +361,7 @@ export const HomeScreen = ({ onStart }) => {
             borderRadius:        '28px 28px 0 0',
             border:              '1px solid rgba(255,255,255,0.65)',
             boxShadow:           '0 -10px 48px rgba(0,0,0,0.14)',
-            padding:             '10px 20px calc(32px + env(safe-area-inset-bottom, 0px))',
+            padding:             '18px 20px calc(56px + env(safe-area-inset-bottom, 0px))',
           }}>
             {/* ドラッグハンドル */}
             <div style={{
@@ -302,6 +372,7 @@ export const HomeScreen = ({ onStart }) => {
               margin:       '12px auto 20px',
             }} />
 
+
             {/* ピッカータイトル */}
             <div style={{
               textAlign:     'center',
@@ -311,15 +382,15 @@ export const HomeScreen = ({ onStart }) => {
               letterSpacing: '0.08em',
               marginBottom:  16,
             }}>
-              🍃 あなたのライフスタイルは？
+              あなたのライフスタイルは？
             </div>
 
             {/* ライフタイプカード 3択 */}
             <div style={{
               display:             'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
-              gap:                 10,
-              marginBottom:        18,
+              gap:                 16,
+              marginBottom:        20,
             }}>
               {LIFE_TYPES.map((lt) => {
                 const active = lifeType === lt.id;
@@ -344,8 +415,11 @@ export const HomeScreen = ({ onStart }) => {
                         : '0 2px 10px rgba(0,0,0,0.05)',
                     }}
                   >
-                    <div style={{ fontSize: 28, lineHeight: 1, marginBottom: 7 }}>
-                      {lt.icon}
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                      <svg width={32} height={32} viewBox="0 0 24 24"
+                        fill={active ? lt.color : '#5a8060'}>
+                        <path d={PICKER_ICON_PATHS[lt.iconKey]} />
+                      </svg>
                     </div>
                     <div style={{
                       fontSize:   13,
@@ -388,7 +462,7 @@ export const HomeScreen = ({ onStart }) => {
                 transition:    'transform 0.12s ease',
               }}
             >
-              🌿 このタイプで始める
+              このタイプで始める
             </button>
           </div>
         </div>

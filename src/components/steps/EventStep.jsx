@@ -7,7 +7,7 @@ import { fmtMan, safeNum, genId } from '../../utils.js';
 // ★ LIFE_EVENT_TEMPLATES の各要素は:
 //   { id, label, icon, defaultAge, defaultCost }
 
-const EVENT_ICONS = ['🚗', '✈️', '🏥', '💍', '🎓', '🏠', '💻', '🎉', '🌏', '👨‍👩‍👧', '💰', '🏦', '🎸', '🐕', '⛳', '🎨'];
+// アイコン選択を廃止（iOS絵文字非対応のため）
 
 const st = {
   wrap: { padding: '16px 16px 8px' },
@@ -58,7 +58,7 @@ const EventCard = ({ event, onChange, onDelete }) => {
     <div style={st.eventCard}>
       <div style={st.eventHeader} onClick={() => setOpen(!open)}>
         <div style={st.eventLeft}>
-          <span style={st.eventIcon}>{event.icon || '📌'}</span>
+          <div style={{ width: 24, height: 24, borderRadius: 6, background: '#6b7280', flexShrink: 0 }} />
           <div style={st.eventInfo}>
             <div style={st.eventLabel}>{event.label || '（ラベル未設定）'}</div>
             <div style={st.eventMeta}>{event.age}歳 · {fmtMan(safeNum(event.cost, 0))}万円</div>
@@ -70,14 +70,6 @@ const EventCard = ({ event, onChange, onDelete }) => {
 
       {open && (
         <>
-          <div style={st.iconPickerRow}>
-            {EVENT_ICONS.map((ic) => (
-              <button key={ic} style={st.iconBtn(event.icon === ic)} onClick={() => onChange('icon', ic)}>
-                {ic}
-              </button>
-            ))}
-          </div>
-
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>イベント名</div>
             <input
@@ -136,7 +128,7 @@ export const EventStep = ({ form, onChange, errors = {} }) => {
   const handleAddCustom = () => {
     const newEvent = {
       id:    genId(),
-      icon:  '📌',
+      icon:  '●',
       label: '',
       age:   currentAge + 5,
       cost:  100,
@@ -180,7 +172,7 @@ export const EventStep = ({ form, onChange, errors = {} }) => {
               onTouchStart={() => setHoverId(tpl.id)}
               onTouchEnd={() => setTimeout(() => setHoverId(null), 150)}
             >
-              <div style={st.templateIcon}>{isAdded ? '✅' : tpl.icon}</div>
+              <div style={st.templateIcon}>{isAdded ? '✓' : '+'}</div>
               <div style={{ ...st.templateName, color: isAdded ? '#065f46' : '#374151' }}>
                 {isAdded ? '追加しました' : tpl.label}
               </div>

@@ -1,7 +1,7 @@
 {
-  "name": "ライフプランシミュレーター",
-  "short_name": "ライフプラン",
-  "description": "老後資金・教育費・住宅購入を一括シミュレーション",
+  "name": "Mirai Tree",
+  "short_name": "Mirai Tree",
+  "description": "Life Plan Simulator",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#667eea",

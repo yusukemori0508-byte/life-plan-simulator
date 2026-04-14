@@ -65,18 +65,18 @@ const buildEvents = (profile) => {
   const list = [];
   const add = (age, icon) => { if (age > 0) list.push({ age: Number(age), icon }); };
 
-  if (profile.housingPurchaseAge) add(profile.housingPurchaseAge, '🏠');
+  if (profile.housingPurchaseAge) add(profile.housingPurchaseAge, '宅');
 
   const numC = profile.numChildren || 0;
   const childArr = Array.isArray(profile.childAges) ? profile.childAges : [profile.firstChildAge];
   for (let i = 0; i < numC; i++) {
     const ba = childArr[i] ?? (childArr[0] != null ? childArr[0] + i * (profile.childSpacing || 3) : null);
-    if (ba > 0) { add(ba, '👶'); add(ba + 18, '🎓'); }
+    if (ba > 0) { add(ba, '子'); add(ba + 18, '学'); }
   }
   if (profile.carOwnership && profile.carFirstAge > 0) {
     const cycle  = profile.carReplaceCycle || 7;
     const retire = profile.retirementAge   || 65;
-    for (let a = profile.carFirstAge; a <= retire; a += cycle) add(a, '🚗');
+    for (let a = profile.carFirstAge; a <= retire; a += cycle) add(a, '車');
   }
 
   // 同じ年のアイコンをまとめる
@@ -159,7 +159,7 @@ const LineChart = ({ data, ageMin, ageMax, retireAge, minAssetAge, tabId, events
   const areaGradId = tabId === 'income' ? 'fc-inc' : tabId === 'expense' ? 'fc-exp' : 'fc-pos';
 
   // イベントマーカー（住宅購入のみ チャートに表示）
-  const visEvents = events.filter(e => e.age >= ageMin && e.age <= ageMax && e.icon.includes('🏠'));
+  const visEvents = events.filter(e => e.age >= ageMin && e.age <= ageMax && e.icon.includes('宅'));
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
@@ -195,7 +195,7 @@ const LineChart = ({ data, ageMin, ageMax, retireAge, minAssetAge, tabId, events
             x={PL - 3} y={yOf(v).toFixed(1)}
             textAnchor="end" dominantBaseline="middle"
             fontSize="7.5" fill={v === 0 ? '#64748b' : '#94a3b8'}
-            fontFamily="-apple-system,sans-serif"
+            fontFamily="'Noto Sans JP', -apple-system, 'Apple Color Emoji', sans-serif"
           >{fmtAxis(v)}</text>
         </g>
       ))}
@@ -205,7 +205,7 @@ const LineChart = ({ data, ageMin, ageMax, retireAge, minAssetAge, tabId, events
         <text key={a}
           x={xOf(a).toFixed(1)} y={PT + CH + 10}
           textAnchor="middle" fontSize="7.5" fill="#94a3b8"
-          fontFamily="-apple-system,sans-serif"
+          fontFamily="'Noto Sans JP', -apple-system, 'Apple Color Emoji', sans-serif"
         >{a}</text>
       ))}
 
@@ -274,7 +274,7 @@ const LineChart = ({ data, ageMin, ageMax, retireAge, minAssetAge, tabId, events
             <text
               x={x.toFixed(1)} y={(PT + CH + 30)}
               textAnchor="middle" fontSize="8" fill="#f97316" fontWeight="bold"
-              fontFamily="-apple-system,sans-serif"
+              fontFamily="'Noto Sans JP', -apple-system, 'Apple Color Emoji', sans-serif"
             >
               {ev.age}歳
             </text>
@@ -327,7 +327,7 @@ const TableView = ({ rows, eventsByAge, retireAge, minAssetAge }) => {
                   {fmtCell(r.totalAssets)}
                 </td>
                 <td style={{ padding: '5px 6px', textAlign: 'center', fontSize: 12 }}>
-                  {eventsByAge[r.age] || ''}{isRetire ? '🎊' : ''}
+                  {eventsByAge[r.age] || ''}{isRetire ? '★' : ''}
                 </td>
               </tr>
             );
@@ -382,7 +382,7 @@ export const FinanceChart = ({ rows, rowsNoPension, profile, minAssetInfo, pensi
   }, [rows, rowsNoPension]);
 
   return (
-    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif' }}>
+    <div style={{ fontFamily: "'Noto Sans JP', -apple-system, 'Apple Color Emoji', sans-serif" }}>
 
       {/* タブバー */}
       <div style={{ display: 'flex', gap: 2, marginBottom: 10, background: '#f1f5f9', borderRadius: 10, padding: 3 }}>
@@ -404,6 +404,12 @@ export const FinanceChart = ({ rows, rowsNoPension, profile, minAssetInfo, pensi
           padding: '8px 2px 2px',
           border: '1px solid #f1f5f9',
         }}>
+          {/* 資産タブの定義サブラベル */}
+          {tab === 'assets' && (
+            <div style={{ textAlign: 'center', fontSize: 9, color: '#94a3b8', marginBottom: 2 }}>
+              総金融資産（現預金＋投資・NISA残高）　*不動産価値・ローン残債を除く
+            </div>
+          )}
           <LineChart
             data={getData(tab)}
             ageMin={ageMin} ageMax={ageMax}
@@ -425,7 +431,7 @@ export const FinanceChart = ({ rows, rowsNoPension, profile, minAssetInfo, pensi
                 最低資産
               </div>
             )}
-            {events.some(e => e.icon.includes('🏠') && e.age >= ageMin && e.age <= ageMax) && (
+            {events.some(e => e.icon.includes('宅') && e.age >= ageMin && e.age <= ageMax) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#f97316' }}>
                 <div style={{ width: 8, height: 8, background: '#f97316', transform: 'rotate(45deg)', opacity: 0.85 }} />
                 住宅購入
@@ -446,18 +452,24 @@ export const FinanceChart = ({ rows, rowsNoPension, profile, minAssetInfo, pensi
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 700, color: showPension ? '#15803d' : '#6b7280' }}>
-                    {showPension ? '✅ 年金収入を含む試算' : '⬜ 年金収入を除いた試算'}
+                    {showPension ? '● 年金収入を含む試算' : '○ 年金収入を除いた試算'}
                   </div>
                   {showPension && pensionInfo.totalMonthly > 0 && (
                     <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1 }}>
                       推定 約{pensionInfo.totalMonthly}万円/月
                       {pensionInfo.spouseAnnual > 0 && `（本人+配偶者）`}
-                      · {pensionAge}歳〜
+                      · {pensionAge}歳〜受給開始
                     </div>
                   )}
                   {!showPension && pensionImpact !== null && pensionImpact > 0 && (
                     <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1 }}>
-                      年金あり比較で約+{pensionImpact.toLocaleString()}万の差
+                      年金あり比較で最終資産が約+{pensionImpact.toLocaleString()}万円の差
+                    </div>
+                  )}
+                  {showPension && pensionImpact !== null && pensionImpact > 0 && (
+                    <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1 }}>
+                      年金なし試算との差：約+{pensionImpact.toLocaleString()}万円
+                      （トグルで比較できます）
                     </div>
                   )}
                 </div>
